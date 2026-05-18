@@ -1,2 +1,33 @@
-/16_04_26 Escopo do projeto corporativo 2026 sabrina (1).pdf
-/16_04_26 Escopo do projeto corporativo 2026 sabrina.zip
+# Dependências
+node_modules/
+**/node_modules/
+
+# Build frontend
+vue-app/dist/
+vue-app/dist-ssr/
+
+# Documentação e materiais acadêmicos (local)
+docs/
+
+# Ambiente e segredos
+.env
+.env.local
+backend/.env
+backend/firebase-service-account.json
+backend/*-firebase-adminsdk-*.json
+backend/secrets/
+
+# Banco local SQLite
+backend/prisma/dev.db
+backend/prisma/*.db-journal
+
+# Logs
+*.log
+npm-debug.log*
+
+# SO / editor
+.DS_Store
+.directory
+.idea/
+.vscode/*
+!.vscode/extensions.json
