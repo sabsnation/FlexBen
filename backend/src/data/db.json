@@ -1,0 +1,59 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "nome": "Admin RH",
+      "email": "admin@empresa.com",
+      "senha": "123",
+      "role": "administrador",
+      "status": "Ativo",
+      "dataCadastro": "01/04/2026"
+    },
+    {
+      "id": 2,
+      "nome": "Sabrina Admin",
+      "email": "sabrina.admin@empresa.com",
+      "senha": "123",
+      "role": "administrador",
+      "status": "Ativo",
+      "dataCadastro": "15/04/2026"
+    },
+    {
+      "id": 3,
+      "nome": "João Silva",
+      "email": "joao.silva@empresa.com",
+      "senha": "123",
+      "role": "colaborador",
+      "status": "Ativo",
+      "dataCadastro": "10/04/2026"
+    }
+  ],
+  "categories": [
+    { "id": 1, "nome": "Alimentação", "limite": 800, "status": "Ativa" },
+    { "id": 2, "nome": "Mobilidade", "limite": 300, "status": "Ativa" },
+    { "id": 3, "nome": "Saúde", "limite": 500, "status": "Ativa" },
+    { "id": 4, "nome": "Educação", "limite": 400, "status": "Ativa" }
+  ],
+  "transactions": [
+    {
+      "id": 1,
+      "userEmail": "joao.silva@empresa.com",
+      "data": "12/04/2026",
+      "tipo": "Saída",
+      "categoria": "Alimentação",
+      "valor": 200,
+      "status": "Concluída",
+      "descricao": "Refeição — Almoço equipe"
+    },
+    {
+      "id": 2,
+      "userEmail": "joao.silva@empresa.com",
+      "data": "10/04/2026",
+      "tipo": "Entrada",
+      "categoria": "Mobilidade",
+      "valor": 300,
+      "status": "Concluída",
+      "descricao": "Crédito mobilidade (carga)"
+    }
+  ]
+}

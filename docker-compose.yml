@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: corpbenefit-pg
+    environment:
+      POSTGRES_USER: corp
+      POSTGRES_PASSWORD: corp
+      POSTGRES_DB: corpbenefit
+    ports:
+      - "5432:5432"
+    volumes:
+      - corp_pg_data:/var/lib/postgresql/data
+
+volumes:
+  corp_pg_data:

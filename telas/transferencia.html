@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Transferencia - Beneficios Corporativos</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="nav">
+        <a class="btn secondary" href="./dashboard.html">Voltar ao painel</a>
+      </div>
+
+      <div class="card">
+        <h1>Transferencia de Beneficios</h1>
+        <p class="subtitle">Fluxo inicial para envio de beneficios entre usuarios.</p>
+
+        <div class="grid cols-2">
+          <div>
+            <label for="destinatario">Destinatario (CPF ou e-mail)</label>
+            <input id="destinatario" type="text" placeholder="000.000.000-00 ou email@empresa.com" />
+          </div>
+
+          <div>
+            <label for="categoria">Categoria</label>
+            <select id="categoria">
+              <option>Alimentacao</option>
+              <option>Mobilidade</option>
+              <option>Saude</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="valor">Valor</label>
+            <input id="valor" type="number" placeholder="0,00" />
+          </div>
+
+          <div>
+            <label for="descricao">Descricao</label>
+            <input id="descricao" type="text" placeholder="Ex: apoio para refeicao" />
+          </div>
+        </div>
+
+        <div class="actions">
+          <a class="btn" href="./dashboard.html">Confirmar transferencia</a>
+          <a class="btn secondary" href="./dashboard.html">Cancelar</a>
+        </div>
+      </div>
+    </div>
+  </body>
+  </html>

@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int           @id @default(autoincrement())
+  nome          String
+  email         String        @unique
+  passwordHash  String        @map("password_hash")
+  role          String
+  status        String
+  dataCadastro  String        @map("data_cadastro")
+  transactions  Transaction[]
+
+  @@map("users")
+}
+
+model Category {
+  id     Int     @id @default(autoincrement())
+  nome   String
+  limite Float
+  status String
+
+  @@map("categories")
+}
+
+model PolicyRule {
+  id                Int    @id @default(autoincrement())
+  role              String
+  category          String
+  costCenter        String @map("cost_center")
+  maxPerTransaction Float  @map("max_per_transaction")
+  monthlyCap        Float  @map("monthly_cap")
+  requiresApproval  Boolean @default(false) @map("requires_approval")
+  active            Boolean @default(true)
+
+  @@map("policy_rules")
+}
+
+model Transaction {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  data      String
+  tipo      String
+  categoria String
+  valor     Float
+  status    String
+  descricao String?
+  events    WorkflowEvent[]
+
+  @@index([userId])
+  @@map("transactions")
+}
+
+model WorkflowEvent {
+  id            Int         @id @default(autoincrement())
+  transactionId Int         @map("transaction_id")
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  fromStatus    String?     @map("from_status")
+  toStatus      String      @map("to_status")
+  actorEmail    String      @map("actor_email")
+  note          String?
+  createdAt     String      @map("created_at")
+
+  @@index([transactionId])
+  @@map("workflow_events")
+}

@@ -1,0 +1,14 @@
+{
+  "name": "corpbenefit-workspace",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "install:all": "npm --prefix ./backend install && npm --prefix ./vue-app install",
+    "dev:backend": "npm --prefix ./backend run dev",
+    "dev:frontend": "npm --prefix ./vue-app run dev",
+    "dev": "concurrently -n BACKEND,FRONTEND -c blue,green \"npm --prefix ./backend run dev\" \"npm --prefix ./vue-app run dev\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

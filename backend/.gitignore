@@ -1,0 +1,8 @@
+node_modules/
+.env
+*.log
+
+# Chaves Firebase (nunca commitar)
+firebase-service-account.json
+*-firebase-adminsdk-*.json
+secrets/

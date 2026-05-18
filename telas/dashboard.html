@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard - Beneficios Corporativos</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="nav">
+        <a class="btn secondary" href="./login.html">Sair</a>
+        <a class="btn" href="./transferencia.html">Nova transferencia</a>
+      </div>
+
+      <div class="card">
+        <h1>Painel de Beneficios</h1>
+        <p class="subtitle">Consulta de saldo e visao inicial de transacoes.</p>
+
+        <div class="grid cols-2">
+          <div class="kpi">
+            <div class="label">Saldo disponivel</div>
+            <div class="value ok">R$ 1.850,00</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Transferencias no mes</div>
+            <div class="value">12</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 16px;">
+        <h2>Ultimas transacoes</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Tipo</th>
+              <th>Categoria</th>
+              <th>Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>12/04/2026</td>
+              <td>Transferencia enviada</td>
+              <td>Alimentacao</td>
+              <td>R$ 200,00</td>
+            </tr>
+            <tr>
+              <td>10/04/2026</td>
+              <td>Credito</td>
+              <td>Mobilidade</td>
+              <td>R$ 300,00</td>
+            </tr>
+            <tr>
+              <td>08/04/2026</td>
+              <td>Transferencia recebida</td>
+              <td>Saude</td>
+              <td>R$ 120,00</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </body>
+  </html>
