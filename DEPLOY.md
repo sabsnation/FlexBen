@@ -84,7 +84,18 @@ Alternativa manual (sem `vercel.json` na raiz):
 | **Output Directory** | `dist` |
 | **Install Command** | `npm install` |
 
-3. **Environment Variables** (Production):
+3. **Importante — pasta `vue-app` no GitHub**
+
+   O frontend precisa estar **versionado como arquivos normais**, não como submódulo Git. Se o build falhar com `vue-app/package.json` não encontrado, no seu PC:
+
+   ```bash
+   git rm --cached vue-app
+   git add vue-app/
+   git commit -m "fix: incluir vue-app no repositório (remover submódulo)"
+   git push
+   ```
+
+5. **Environment Variables** (Production):
 
 | Nome | Valor |
 |------|--------|
@@ -92,9 +103,9 @@ Alternativa manual (sem `vercel.json` na raiz):
 
 (substitua pela URL real do Render, **com** `/api` no final)
 
-4. **Deploy**.
+6. **Deploy**.
 
-5. Copie a URL da Vercel (ex. `https://flexben.vercel.app`).
+7. Copie a URL da Vercel (ex. `https://flexben.vercel.app`).
 
 ---
 
