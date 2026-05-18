@@ -30,3 +30,7 @@ npm run dev
 ```
 
 Acesse o frontend na URL do Vite (geralmente `http://localhost:5173`). Contas demo na tela de login (senha `123`).
+
+## Deploy (Render + Vercel)
+
+Siga o guia **[DEPLOY.md](DEPLOY.md)** para publicar a API no Render e o frontend na Vercel.
