@@ -3,11 +3,18 @@
     <PageHeader
       title="Registrar utilização"
       subtitle="Lance uma saída de crédito em uma categoria. Conforme política, pode exigir aprovação gerencial."
+      eyebrow="Operação flex"
     />
 
     <div class="grid cols-2">
       <div class="card">
-        <h3 class="card-title">Detalhes da utilização</h3>
+        <h3 class="card-title">
+          <span class="title-with-icon">
+            <span class="icon-bg sm warning"><Icon name="send" :size="14" /></span>
+            Detalhes da utilização
+          </span>
+        </h3>
+
         <div class="form-group">
           <label>Categoria <span class="req">*</span></label>
           <select v-model="form.categoria">
@@ -24,49 +31,56 @@
         </div>
 
         <button
-          class="btn btn-primary btn-block"
+          class="btn btn-primary btn-block mt-3"
           :disabled="submitDisabled || !auth.can('usage_register') || loading"
           @click="submit"
         >
-          <span v-if="!loading">Registrar saída de R$ {{ (form.valor || 0).toFixed(2) }}</span>
+          <Icon v-if="loading" name="spinner" :size="14" class="spin" />
+          <Icon v-else name="send" :size="14" />
+          <span v-if="!loading">Registrar saída de {{ formatCurrency(form.valor || 0) }}</span>
           <span v-else>Processando…</span>
         </button>
-        <p v-if="!auth.can('usage_register')" class="field-help" style="text-align: center; margin-top: 0.5rem;">
+        <p v-if="!auth.can('usage_register')" class="field-help text-center mt-2">
           Seu perfil não tem permissão para registrar utilização.
         </p>
       </div>
 
       <div class="stack">
         <div class="card">
-          <h3 class="card-title">Pré-visualização</h3>
+          <h3 class="card-title">
+            <span class="title-with-icon">
+              <span class="icon-bg sm info"><Icon name="eye" :size="14" /></span>
+              Pré-visualização
+            </span>
+          </h3>
           <div class="preview-row">
             <span class="muted">Categoria selecionada</span>
-            <strong>{{ form.categoria || '-' }}</strong>
+            <strong>{{ form.categoria || '—' }}</strong>
           </div>
           <div class="preview-row">
             <span class="muted">Saldo atual da categoria</span>
-            <strong>R$ {{ currentBal.toFixed(2) }}</strong>
+            <strong>{{ formatCurrency(currentBal) }}</strong>
           </div>
           <div class="preview-row">
             <span class="muted">Valor a debitar</span>
-            <strong>R$ {{ (form.valor || 0).toFixed(2) }}</strong>
+            <strong>{{ formatCurrency(form.valor || 0) }}</strong>
           </div>
           <div class="preview-row total">
             <span class="muted">Saldo após o lançamento</span>
             <strong :style="{ color: after < 0 ? 'var(--brand-danger)' : 'var(--brand-accent)' }">
-              R$ {{ after.toFixed(2) }}
+              {{ formatCurrency(after) }}
             </strong>
           </div>
         </div>
 
         <div v-if="after < 0" class="notice danger">
-          <span>⚠</span>
+          <Icon class="notice-icon" name="alert-triangle" :size="18" />
           <span>Saldo insuficiente: o lançamento ultrapassaria o disponível na categoria.</span>
         </div>
 
         <div class="card muted-bg">
-          <h4 style="margin-bottom: 0.5rem;">Sobre as utilizações</h4>
-          <ul style="padding-left: 1.1rem; color: var(--text-muted); font-size: 0.85rem; line-height: 1.6;">
+          <h4 class="mb-2">Sobre as utilizações</h4>
+          <ul class="info-list">
             <li>O lançamento é debitado do saldo da categoria escolhida.</li>
             <li>Conforme a política, o registro pode ficar "Em análise" para decisão do gestor.</li>
             <li>Acompanhe o status na tela de <RouterLink class="link" to="/transacoes">Transações</RouterLink>.</li>
@@ -86,6 +100,7 @@ import { useAuth } from '../auth'
 import { useToast } from '../toast'
 import { balanceForCategory } from '../services/transactionService'
 import PageHeader from '../components/PageHeader.vue'
+import Icon from '../components/Icon.vue'
 
 const router = useRouter()
 const { categories, loadCategories } = useCategories()
@@ -122,6 +137,9 @@ const submitDisabled = computed(() => {
   return false
 })
 
+const formatCurrency = (v) =>
+  Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
 const submit = async () => {
   if (loading.value) return
   if (!auth.can('usage_register')) {
@@ -148,13 +166,30 @@ const submit = async () => {
 </script>
 
 <style scoped>
+.title-with-icon { display: inline-flex; align-items: center; gap: 10px; }
 .preview-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.6rem 0;
-  border-bottom: 1px dashed var(--border-light);
+  padding: 0.7rem 0;
+  border-bottom: 1px dashed var(--border-subtle);
+  gap: 1rem;
 }
 .preview-row:last-child { border-bottom: none; }
-.preview-row.total { padding-top: 0.85rem; border-bottom: none; border-top: 2px solid var(--border-light); }
+.preview-row.total {
+  padding-top: 0.95rem;
+  border-bottom: none;
+  border-top: 2px solid var(--border-light);
+  margin-top: 0.4rem;
+}
+
+.info-list {
+  padding-left: 1.1rem;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.65;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 </style>

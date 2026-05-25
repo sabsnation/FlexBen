@@ -2,42 +2,58 @@
   <div class="container">
     <PageHeader
       title="Auditoria"
-      subtitle="Eventos importantes registrados em banco NoSQL (Firestore). Sem credenciais, a lista fica vazia."
+      subtitle="Eventos importantes registrados em banco NoSQL (Firestore / MongoDB). Sem credenciais, a lista fica vazia."
+      eyebrow="Governança"
     >
       <template #actions>
-        <button class="btn btn-secondary" type="button" @click="reload">↻ Atualizar</button>
+        <button class="btn btn-secondary" type="button" @click="reload" :disabled="loading">
+          <Icon :name="loading ? 'spinner' : 'refresh'" :size="14" :class="loading ? 'spin' : ''" />
+          Atualizar
+        </button>
       </template>
     </PageHeader>
 
     <div v-if="!credentialConfigured" class="notice warning">
-      <span>⚠</span>
+      <Icon class="notice-icon" name="alert-triangle" :size="18" />
       <span>
-        Nenhuma credencial Firebase no <code>backend/.env</code>. Use uma das opções:
-        <code>FIREBASE_SERVICE_ACCOUNT</code> (JSON em uma linha),
-        <code>FIREBASE_SERVICE_ACCOUNT_PATH</code> (ex.: <code>./firebase-service-account.json</code>)
-        ou <code>GOOGLE_APPLICATION_CREDENTIALS</code> (caminho do JSON da service account).
+        Nenhuma credencial NoSQL no <code>backend/.env</code>. Configure um dos provedores:
+        Firebase (<code>FIREBASE_SERVICE_ACCOUNT</code> JSON em 1 linha) ou
+        MongoDB (<code>MONGODB_URI</code>). Use também <code>AUDIT_PROVIDER</code> para fixar.
       </span>
     </div>
     <div v-else-if="!firestoreEnabled && firebaseInitError" class="notice danger">
-      <span>!</span>
+      <Icon class="notice-icon" name="alert-circle" :size="18" />
       <span>
-        Credencial configurada, mas o Firestore não iniciou: <strong>{{ firebaseInitError }}</strong>
+        Credencial configurada, mas o Firestore não iniciou: <strong>{{ firebaseInitError }}</strong>.
         Confira o JSON, o caminho do arquivo e se o Firestore está criado no projeto Firebase.
       </span>
     </div>
 
     <div class="grid cols-3 mb-3">
-      <KpiCard label="Eventos exibidos" :value="filtered.length" tone="info" />
-      <KpiCard label="Total recebido" :value="events.length" />
-      <KpiCard label="Firestore" :value="firestoreEnabled ? 'ativo' : 'desligado'" :tone="firestoreEnabled ? 'success' : 'warning'" />
+      <KpiCard label="Eventos exibidos" :value="filtered.length" tone="info" icon="list" />
+      <KpiCard label="Total recebido" :value="events.length" icon="activity" />
+      <KpiCard
+        label="Provider NoSQL"
+        :value="firestoreEnabled ? 'ativo' : 'desligado'"
+        :tone="firestoreEnabled ? 'success' : 'warning'"
+        icon="shield"
+      />
     </div>
 
     <div class="card mb-3">
-      <h3 class="card-title">Filtros</h3>
+      <h3 class="card-title">
+        <span class="title-with-icon">
+          <span class="icon-bg sm"><Icon name="filter" :size="14" /></span>
+          Filtros
+        </span>
+      </h3>
       <div class="form-row">
         <div class="form-group">
           <label>Buscar ação ou ator</label>
-          <input v-model="search" type="text" placeholder="ex.: APPROVAL_DECISION ou admin@..." />
+          <div class="input-wrap">
+            <Icon name="search" :size="14" class="input-icon" />
+            <input v-model="search" type="text" placeholder="ex.: APPROVAL_DECISION ou admin@..." />
+          </div>
         </div>
         <div class="form-group">
           <label>Módulo</label>
@@ -49,13 +65,15 @@
       </div>
     </div>
 
-    <div v-if="loading" class="card text-center muted">Carregando eventos…</div>
-
-    <div v-else-if="!filtered.length" class="card">
-      <EmptyState icon="⎘" title="Nenhum evento" message="Nenhum evento corresponde aos filtros." />
+    <div v-if="loading" class="card text-center muted">
+      <Icon name="spinner" :size="16" class="spin" /> Carregando eventos…
     </div>
 
-    <div v-else class="table-wrapper">
+    <div v-else-if="!filtered.length" class="card">
+      <EmptyState icon="shield" title="Nenhum evento" message="Nenhum evento corresponde aos filtros." />
+    </div>
+
+    <div v-else class="table-wrapper scrollable">
       <table>
         <thead>
           <tr>
@@ -68,7 +86,7 @@
         </thead>
         <tbody>
           <tr v-for="ev in filtered" :key="ev.id">
-            <td class="muted" style="white-space: nowrap;">{{ formatDate(ev.createdAt) }}</td>
+            <td class="muted nowrap">{{ formatDate(ev.createdAt) }}</td>
             <td><span class="badge badge-info">{{ ev.action }}</span></td>
             <td><strong>{{ ev.actorEmail }}</strong></td>
             <td>{{ ev.payload?.module || '—' }}</td>
@@ -89,6 +107,7 @@ import { useToast } from '../toast'
 import PageHeader from '../components/PageHeader.vue'
 import KpiCard from '../components/KpiCard.vue'
 import EmptyState from '../components/EmptyState.vue'
+import Icon from '../components/Icon.vue'
 
 const events = ref([])
 const firestoreEnabled = ref(false)
@@ -104,7 +123,7 @@ const reload = async () => {
   try {
     const data = await api.get('/admin/audit')
     events.value = data.events || []
-    firestoreEnabled.value = !!data.firestoreEnabled
+    firestoreEnabled.value = !!data.firestoreEnabled || !!data.ready
     credentialConfigured.value = !!data.credentialConfigured
     firebaseInitError.value = data.firebaseInitError || null
   } catch (e) {
@@ -145,14 +164,26 @@ const formatDate = (iso) => {
 </script>
 
 <style scoped>
+.title-with-icon { display: inline-flex; align-items: center; gap: 10px; }
+.input-wrap { position: relative; }
+.input-wrap input { padding-left: 2.25rem; }
+.input-icon {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  color: var(--text-subtle);
+  pointer-events: none;
+}
 .payload {
   display: block;
   white-space: pre-wrap;
   word-break: break-all;
   background: var(--surface-soft);
-  padding: 0.4rem 0.6rem;
-  border-radius: 6px;
-  font-size: 0.78rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--radius-xs);
+  font-size: 0.75rem;
   color: var(--text-strong);
+  font-family: var(--font-mono);
 }
 </style>

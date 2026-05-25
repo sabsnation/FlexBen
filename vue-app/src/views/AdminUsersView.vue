@@ -3,24 +3,36 @@
     <PageHeader
       title="Gestão de usuários"
       subtitle="Administre acessos, perfis e status dos colaboradores do programa flex."
+      eyebrow="Administração"
     >
       <template #actions>
-        <button class="btn btn-primary" @click="openInvite">+ Convidar usuário</button>
+        <button class="btn btn-primary" @click="openInvite">
+          <Icon name="plus" :size="14" /> Convidar usuário
+        </button>
       </template>
     </PageHeader>
 
     <div class="grid cols-4 mb-3">
-      <KpiCard label="Total de usuários" :value="total" tone="info" />
-      <KpiCard label="Ativos" :value="counts.active" tone="success" />
-      <KpiCard label="Inativos" :value="counts.inactive" tone="warning" />
-      <KpiCard label="Administradores" :value="counts.admin" />
+      <KpiCard label="Total de usuários" :value="total" tone="info" icon="users" />
+      <KpiCard label="Ativos" :value="counts.active" tone="success" icon="check-circle" />
+      <KpiCard label="Inativos" :value="counts.inactive" tone="warning" icon="x-circle" />
+      <KpiCard label="Administradores" :value="counts.admin" icon="shield" />
     </div>
 
     <div class="card mb-3">
+      <h3 class="card-title">
+        <span class="title-with-icon">
+          <span class="icon-bg sm"><Icon name="filter" :size="14" /></span>
+          Filtros
+        </span>
+      </h3>
       <div class="form-row">
         <div class="form-group">
           <label>Buscar</label>
-          <input v-model="filters.search" type="text" placeholder="Nome ou e-mail…" />
+          <div class="input-wrap">
+            <Icon name="search" :size="14" class="input-icon" />
+            <input v-model="filters.search" type="text" placeholder="Nome ou e-mail…" />
+          </div>
         </div>
         <div class="form-group">
           <label>Perfil</label>
@@ -44,7 +56,7 @@
     </div>
 
     <div v-if="filtered.length === 0" class="card">
-      <EmptyState icon="◉" title="Nenhum usuário encontrado" message="Ajuste os filtros ou convide um novo usuário." />
+      <EmptyState icon="users" title="Nenhum usuário encontrado" message="Ajuste os filtros ou convide um novo usuário." />
     </div>
 
     <div v-else class="table-wrapper">
@@ -63,7 +75,7 @@
           <tr v-for="u in filtered" :key="u.id">
             <td>
               <div class="user-row">
-                <div class="avatar-sm" :style="{ background: roleColor(u.role) }">{{ u.initials || (u.nome || '?')[0] }}</div>
+                <div class="avatar sm" :style="{ background: roleColor(u.role) }">{{ u.initials || (u.nome || '?')[0] }}</div>
                 <strong>{{ u.nome }}</strong>
               </div>
             </td>
@@ -74,9 +86,11 @@
             <td class="text-right">
               <div class="actions" style="justify-content: flex-end; gap: 4px;">
                 <button class="btn-icon" type="button" @click="handleToggleStatus(u.id)" :title="u.status === 'Ativo' ? 'Inativar' : 'Reativar'">
-                  {{ u.status === 'Ativo' ? '◉' : '◌' }}
+                  <Icon :name="u.status === 'Ativo' ? 'check-circle' : 'x-circle'" :size="14" />
                 </button>
-                <button class="btn-icon danger" type="button" @click="handleDelete(u.id, u.nome)" title="Excluir">✕</button>
+                <button class="btn-icon danger" type="button" @click="handleDelete(u.id, u.nome)" title="Excluir">
+                  <Icon name="trash" :size="14" />
+                </button>
               </div>
             </td>
           </tr>
@@ -112,6 +126,7 @@
       <template #footer>
         <button class="btn btn-secondary" type="button" @click="closeModal">Cancelar</button>
         <button class="btn btn-primary" type="button" @click="handleInvite" :disabled="modal.loading">
+          <Icon v-if="modal.loading" name="spinner" :size="14" class="spin" />
           <span v-if="!modal.loading">Convidar</span>
           <span v-else>Enviando…</span>
         </button>
@@ -129,6 +144,7 @@ import KpiCard from '../components/KpiCard.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import EmptyState from '../components/EmptyState.vue'
 import Modal from '../components/Modal.vue'
+import Icon from '../components/Icon.vue'
 
 const { users, loadUsers, toggleStatus, deleteUser, inviteUser } = useUsers()
 const { showToast } = useToast()
@@ -165,10 +181,10 @@ const filtered = computed(() => {
 })
 
 const roleColor = (role) => {
-  if (role === 'administrador') return '#6366f1'
-  if (role === 'gestor') return '#0ea5e9'
-  if (role === 'financeiro') return '#f59e0b'
-  return '#10b981'
+  if (role === 'administrador') return 'linear-gradient(135deg, #6366f1, #4338ca)'
+  if (role === 'gestor') return 'linear-gradient(135deg, #0ea5e9, #0369a1)'
+  if (role === 'financeiro') return 'linear-gradient(135deg, #f59e0b, #d97706)'
+  return 'linear-gradient(135deg, #10b981, #059669)'
 }
 const roleLabel = (role) => {
   if (role === 'administrador') return 'RH / Admin'
@@ -250,16 +266,15 @@ const handleDelete = async (id, nome) => {
 
 <style scoped>
 .user-row { display: flex; align-items: center; gap: 12px; }
-.avatar-sm {
-  width: 32px;
-  height: 32px;
-  background: var(--brand-primary);
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 0.78rem;
+.title-with-icon { display: inline-flex; align-items: center; gap: 10px; }
+.input-wrap { position: relative; }
+.input-wrap input { padding-left: 2.25rem; }
+.input-icon {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  color: var(--text-subtle);
+  pointer-events: none;
 }
 </style>

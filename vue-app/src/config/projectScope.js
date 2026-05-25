@@ -1,5 +1,5 @@
 export const PROJECT_SCOPE = Object.freeze({
-  name: 'CorpBenefit Flex',
+  name: 'FlexBen',
   version: '2.0-corporativo',
   positioning:
     'Gestao corporativa de creditos flexiveis internos com governanca por perfil (colaborador, gestor, RH e financeiro).',

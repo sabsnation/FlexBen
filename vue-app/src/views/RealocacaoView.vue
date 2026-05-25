@@ -3,18 +3,24 @@
     <PageHeader
       title="Realocar créditos entre categorias"
       subtitle="Mova valor disponível da categoria de origem para a destino, respeitando os tetos definidos pelo RH."
+      eyebrow="Operação flex"
     />
 
     <div class="grid cols-2">
       <div class="card">
-        <h3 class="card-title">Detalhes da realocação</h3>
+        <h3 class="card-title">
+          <span class="title-with-icon">
+            <span class="icon-bg sm"><Icon name="swap" :size="14" /></span>
+            Detalhes da realocação
+          </span>
+        </h3>
 
         <div class="form-row">
           <div class="form-group">
             <label>Categoria de origem</label>
             <select v-model="form.fromCategory">
               <option v-for="c in activeCategories" :key="'o-' + c.id" :value="c.nome">
-                {{ c.nome }} (teto R$ {{ Number(c.limite).toFixed(2) }})
+                {{ c.nome }} (teto {{ formatCurrency(c.limite) }})
               </option>
             </select>
           </div>
@@ -22,7 +28,7 @@
             <label>Categoria de destino</label>
             <select v-model="form.toCategory">
               <option v-for="c in activeCategories" :key="'d-' + c.id" :value="c.nome">
-                {{ c.nome }} (teto R$ {{ Number(c.limite).toFixed(2) }})
+                {{ c.nome }} (teto {{ formatCurrency(c.limite) }})
               </option>
             </select>
           </div>
@@ -38,52 +44,57 @@
           <textarea v-model="form.descricao" rows="3" placeholder="Ex.: priorizar saúde neste mês" />
         </div>
 
-        <div class="actions" style="margin-top: 1rem;">
-          <button
-            class="btn btn-primary btn-block"
-            :disabled="submitDisabled || !auth.can('credit_reallocate') || loading"
-            @click="submit"
-          >
-            <span v-if="!loading">Confirmar realocação de R$ {{ (form.valor || 0).toFixed(2) }}</span>
-            <span v-else>Processando…</span>
-          </button>
-        </div>
-        <p v-if="!auth.can('credit_reallocate')" class="field-help" style="text-align: center; margin-top: 0.5rem;">
+        <button
+          class="btn btn-primary btn-block mt-3"
+          :disabled="submitDisabled || !auth.can('credit_reallocate') || loading"
+          @click="submit"
+        >
+          <Icon v-if="loading" name="spinner" :size="14" class="spin" />
+          <Icon v-else name="swap" :size="14" />
+          <span v-if="!loading">Confirmar realocação de {{ formatCurrency(form.valor || 0) }}</span>
+          <span v-else>Processando…</span>
+        </button>
+        <p v-if="!auth.can('credit_reallocate')" class="field-help text-center mt-2">
           Seu perfil não tem permissão para realocar créditos.
         </p>
       </div>
 
       <div class="stack">
         <div class="card">
-          <h3 class="card-title">Pré-visualização</h3>
+          <h3 class="card-title">
+            <span class="title-with-icon">
+              <span class="icon-bg sm info"><Icon name="eye" :size="14" /></span>
+              Pré-visualização
+            </span>
+          </h3>
           <div class="preview-row">
-            <span class="muted">Saldo na origem ({{ form.fromCategory || '-' }})</span>
-            <strong>R$ {{ balFrom.toFixed(2) }}</strong>
+            <span class="muted">Saldo na origem ({{ form.fromCategory || '—' }})</span>
+            <strong>{{ formatCurrency(balFrom) }}</strong>
           </div>
           <div class="preview-row">
-            <span class="muted">Saldo na destino atual ({{ form.toCategory || '-' }})</span>
-            <strong>R$ {{ balTo.toFixed(2) }}</strong>
+            <span class="muted">Saldo na destino atual ({{ form.toCategory || '—' }})</span>
+            <strong>{{ formatCurrency(balTo) }}</strong>
           </div>
           <div class="preview-row">
             <span class="muted">Valor da realocação</span>
-            <strong>R$ {{ (form.valor || 0).toFixed(2) }}</strong>
+            <strong>{{ formatCurrency(form.valor || 0) }}</strong>
           </div>
           <div class="preview-row total">
             <span class="muted">Saldo na destino após</span>
             <strong :style="{ color: destAfter > destTeto ? 'var(--brand-danger)' : 'var(--brand-accent)' }">
-              R$ {{ destAfter.toFixed(2) }} / teto R$ {{ destTeto.toFixed(2) }}
+              {{ formatCurrency(destAfter) }} / teto {{ formatCurrency(destTeto) }}
             </strong>
           </div>
         </div>
 
         <div v-if="warningMessage" class="notice" :class="warningType">
-          <span>⚠</span>
+          <Icon class="notice-icon" name="alert-triangle" :size="18" />
           <span>{{ warningMessage }}</span>
         </div>
 
         <div class="card muted-bg">
-          <h4 style="margin-bottom: 0.5rem;">Como funciona</h4>
-          <ul style="padding-left: 1.1rem; color: var(--text-muted); font-size: 0.85rem; line-height: 1.6;">
+          <h4 class="mb-2">Como funciona</h4>
+          <ul class="info-list">
             <li>O valor é movido entre suas próprias categorias do mês corrente.</li>
             <li>O teto da categoria de destino é definido pelo RH.</li>
             <li>Se a política exigir aprovação, a operação ficará "Em análise" até decisão do gestor.</li>
@@ -104,6 +115,7 @@ import { useAuth } from '../auth'
 import { useToast } from '../toast'
 import { balanceForCategory } from '../services/transactionService'
 import PageHeader from '../components/PageHeader.vue'
+import Icon from '../components/Icon.vue'
 
 const router = useRouter()
 const { createReallocation, allTransactions, loadMine } = useTransactions()
@@ -149,10 +161,10 @@ const warningMessage = computed(() => {
     return 'Origem e destino precisam ser categorias diferentes.'
   }
   if (v > 0 && balFrom.value < v) {
-    return `Saldo insuficiente na origem. Disponível: R$ ${balFrom.value.toFixed(2)}.`
+    return `Saldo insuficiente na origem. Disponível: ${formatCurrency(balFrom.value)}.`
   }
   if (v > 0 && destAfter.value > destTeto.value) {
-    return `Operação ultrapassaria o teto da categoria destino (R$ ${destTeto.value.toFixed(2)}).`
+    return `Operação ultrapassaria o teto da categoria destino (${formatCurrency(destTeto.value)}).`
   }
   return ''
 })
@@ -167,6 +179,9 @@ const submitDisabled = computed(() => {
   if (destAfter.value > destTeto.value) return true
   return false
 })
+
+const formatCurrency = (v) =>
+  Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 const submit = async () => {
   if (loading.value) return
@@ -195,13 +210,30 @@ const submit = async () => {
 </script>
 
 <style scoped>
+.title-with-icon { display: inline-flex; align-items: center; gap: 10px; }
 .preview-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.6rem 0;
-  border-bottom: 1px dashed var(--border-light);
+  padding: 0.7rem 0;
+  border-bottom: 1px dashed var(--border-subtle);
+  gap: 1rem;
 }
 .preview-row:last-child { border-bottom: none; }
-.preview-row.total { padding-top: 0.85rem; border-bottom: none; border-top: 2px solid var(--border-light); }
+.preview-row.total {
+  padding-top: 0.95rem;
+  border-bottom: none;
+  border-top: 2px solid var(--border-light);
+  margin-top: 0.4rem;
+}
+
+.info-list {
+  padding-left: 1.1rem;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.65;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 </style>

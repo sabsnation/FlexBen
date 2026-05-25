@@ -3,26 +3,35 @@
     <PageHeader
       title="Fila de aprovações"
       subtitle="Solicitações que aguardam decisão gerencial. Cada decisão é registrada em trilha auditável."
+      eyebrow="Gestão"
     >
       <template #actions>
-        <button class="btn btn-secondary" type="button" @click="refresh">↻ Atualizar</button>
+        <button class="btn btn-secondary" type="button" @click="refresh">
+          <Icon name="refresh" :size="14" /> Atualizar
+        </button>
       </template>
     </PageHeader>
 
     <div class="grid cols-4 mb-3">
-      <KpiCard label="Em análise" :value="sla.kpis.inAnalysis" tone="warning" />
-      <KpiCard label="Aprovadas" :value="sla.kpis.approved" tone="success" />
-      <KpiCard label="Reprovadas" :value="sla.kpis.rejected" tone="danger" />
+      <KpiCard label="Em análise" :value="sla.kpis.inAnalysis" tone="warning" icon="clock" />
+      <KpiCard label="Aprovadas" :value="sla.kpis.approved" tone="success" icon="check-circle" />
+      <KpiCard label="Reprovadas" :value="sla.kpis.rejected" tone="danger" icon="x-circle" />
       <KpiCard
         label="SLA médio"
         :value="`${sla.kpis.avgApprovalHours.toFixed(1)}h`"
         tone="info"
+        icon="activity"
         hint="Tempo médio até decisão"
       />
     </div>
 
     <div class="card mb-3">
-      <h3 class="card-title">Filtros</h3>
+      <h3 class="card-title">
+        <span class="title-with-icon">
+          <span class="icon-bg sm"><Icon name="filter" :size="14" /></span>
+          Filtros
+        </span>
+      </h3>
       <div class="form-row">
         <div class="form-group">
           <label>Status</label>
@@ -41,10 +50,13 @@
       </div>
     </div>
 
-    <div v-if="sla.staleApprovals.length" class="card mb-3" style="border-left: 4px solid var(--brand-danger);">
+    <div v-if="sla.staleApprovals.length" class="card mb-3 card-stale">
       <h3 class="card-title">
-        <span>⚠ Pendências antigas ({{ sla.staleApprovals.length }})</span>
-        <span class="muted" style="font-size: 0.8rem;">{{ thresholdDays }}+ dias sem decisão</span>
+        <span class="title-with-icon">
+          <span class="icon-bg sm danger"><Icon name="alert-triangle" :size="14" /></span>
+          Pendências antigas ({{ sla.staleApprovals.length }})
+        </span>
+        <span class="muted text-xs">{{ thresholdDays }}+ dias sem decisão</span>
       </h3>
       <div class="table-wrapper" style="border: none; box-shadow: none;">
         <table>
@@ -61,9 +73,9 @@
             <tr v-for="item in sla.staleApprovals" :key="'stale-' + item.id">
               <td>{{ item.requesterName }}</td>
               <td>{{ item.category }}</td>
-              <td><strong>R$ {{ item.amount.toFixed(2) }}</strong></td>
+              <td><strong>{{ formatCurrency(item.amount) }}</strong></td>
               <td><StatusBadge :status="item.status" /></td>
-              <td><strong style="color: var(--brand-danger);">{{ item.ageDays }} dia(s)</strong></td>
+              <td><strong class="text-danger">{{ item.ageDays }} dia(s)</strong></td>
             </tr>
           </tbody>
         </table>
@@ -71,9 +83,14 @@
     </div>
 
     <div class="card">
-      <h3 class="card-title">Solicitações</h3>
+      <h3 class="card-title">
+        <span class="title-with-icon">
+          <span class="icon-bg sm"><Icon name="inbox" :size="14" /></span>
+          Solicitações
+        </span>
+      </h3>
 
-      <EmptyState v-if="!approvals.length" icon="✓" title="Nenhuma solicitação" message="Sem itens para os filtros aplicados." />
+      <EmptyState v-if="!approvals.length" icon="check-circle" title="Nenhuma solicitação" message="Sem itens para os filtros aplicados." />
 
       <div v-else class="table-wrapper" style="border: none; box-shadow: none;">
         <table>
@@ -92,24 +109,28 @@
             <tr v-for="item in approvals" :key="item.id">
               <td><strong>{{ item.requesterName }}</strong></td>
               <td>{{ item.category }}</td>
-              <td><strong>R$ {{ item.amount.toFixed(2) }}</strong></td>
+              <td><strong>{{ formatCurrency(item.amount) }}</strong></td>
               <td><StatusBadge :status="item.status" /></td>
-              <td class="muted" style="max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ item.description || '—' }}</td>
+              <td class="muted truncate" style="max-width: 240px;">{{ item.description || '—' }}</td>
               <td class="muted">{{ item.requestedAt }}</td>
               <td class="text-right">
                 <div class="actions" style="justify-content: flex-end; gap: 4px;">
                   <button
-                    class="btn btn-success"
+                    class="btn btn-success btn-sm"
                     type="button"
                     @click="openDecision(item, 'aprovado')"
                     :disabled="!isPending(item.status) || !auth.can('approval_decide')"
-                  >Aprovar</button>
+                  >
+                    <Icon name="check" :size="12" /> Aprovar
+                  </button>
                   <button
-                    class="btn btn-danger"
+                    class="btn btn-danger btn-sm"
                     type="button"
                     @click="openDecision(item, 'reprovado')"
                     :disabled="!isPending(item.status) || !auth.can('approval_decide')"
-                  >Reprovar</button>
+                  >
+                    <Icon name="x" :size="12" /> Reprovar
+                  </button>
                 </div>
               </td>
             </tr>
@@ -123,7 +144,7 @@
         <div class="info-grid mb-2">
           <div><span class="muted">Solicitante</span><strong>{{ modal.item.requesterName }}</strong></div>
           <div><span class="muted">Categoria</span><strong>{{ modal.item.category }}</strong></div>
-          <div><span class="muted">Valor</span><strong>R$ {{ modal.item.amount.toFixed(2) }}</strong></div>
+          <div><span class="muted">Valor</span><strong>{{ formatCurrency(modal.item.amount) }}</strong></div>
           <div><span class="muted">Solicitado em</span><strong>{{ modal.item.requestedAt }}</strong></div>
         </div>
         <div class="form-group">
@@ -131,7 +152,10 @@
           <textarea v-model="modal.justification" rows="3" placeholder="Descreva o motivo da decisão" />
           <p class="field-help">A justificativa fica registrada na trilha de auditoria.</p>
         </div>
-        <p v-if="modal.error" class="field-error">{{ modal.error }}</p>
+        <p v-if="modal.error" class="field-error">
+          <Icon name="alert-circle" :size="14" />
+          {{ modal.error }}
+        </p>
       </div>
 
       <template #footer>
@@ -143,6 +167,8 @@
           :disabled="modal.loading"
           @click="confirmDecision"
         >
+          <Icon v-if="modal.loading" name="spinner" :size="14" class="spin" />
+          <Icon v-else :name="modal.decision === 'aprovado' ? 'check' : 'x'" :size="14" />
           <span v-if="!modal.loading">{{ modal.decision === 'aprovado' ? 'Confirmar aprovação' : 'Confirmar reprovação' }}</span>
           <span v-else>Processando…</span>
         </button>
@@ -161,6 +187,10 @@ import KpiCard from '../components/KpiCard.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import EmptyState from '../components/EmptyState.vue'
 import Modal from '../components/Modal.vue'
+import Icon from '../components/Icon.vue'
+
+const formatCurrency = (v) =>
+  Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 const approvals = ref([])
 const statusFilter = ref('')
@@ -259,16 +289,18 @@ onMounted(refresh)
 </script>
 
 <style scoped>
+.title-with-icon { display: inline-flex; align-items: center; gap: 10px; }
+.card-stale { border-left: 4px solid var(--brand-danger); }
 .info-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 0.75rem 1rem;
   background: var(--surface-soft);
-  padding: 0.85rem 1rem;
+  padding: 1rem 1.1rem;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--border-subtle);
 }
-.info-grid > div { display: flex; flex-direction: column; gap: 2px; }
-.info-grid .muted { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
-.info-grid strong { color: var(--text-strong); font-size: 0.92rem; }
+.info-grid > div { display: flex; flex-direction: column; gap: 4px; }
+.info-grid .muted { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.info-grid strong { color: var(--text-strong); font-size: 0.95rem; }
 </style>

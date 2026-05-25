@@ -1,4 +1,4 @@
-# FlexBen — CorpBenefit Flex
+# FlexBen
 
 Sistema de **benefícios flexíveis corporativos** (TCC): créditos internos, realocação, aprovação do gestor, governança RH e fechamento financeiro.
 

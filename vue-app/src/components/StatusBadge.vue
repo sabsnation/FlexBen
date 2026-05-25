@@ -1,5 +1,5 @@
 <template>
-  <span class="badge" :class="badgeClass">{{ label }}</span>
+  <span class="badge badge-dot" :class="badgeClass">{{ label }}</span>
 </template>
 
 <script setup>
@@ -34,7 +34,7 @@ const labelMap = {
 
 const label = computed(() => {
   const key = normalize(props.status)
-  return labelMap[key] || props.status || '-'
+  return labelMap[key] || props.status || '—'
 })
 
 const badgeClass = computed(() => {

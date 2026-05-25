@@ -2,10 +2,13 @@
   <div class="container">
     <PageHeader
       title="Painel executivo do RH"
-      subtitle="Governança corporativa, orçamento previsto x realizado e drill-down por centro de custo."
+      subtitle="Governança corporativa, orçamento previsto × realizado e drill-down por centro de custo."
+      eyebrow="RH / Admin"
     >
       <template #actions>
-        <button class="btn btn-secondary" type="button" @click="load">↻ Atualizar</button>
+        <button class="btn btn-secondary" type="button" @click="load">
+          <Icon name="refresh" :size="14" /> Atualizar
+        </button>
       </template>
       <template #meta>
         <div class="period-row">
@@ -26,9 +29,9 @@
     </PageHeader>
 
     <div class="grid cols-3 mb-3">
-      <KpiCard label="Categorias ativas" :value="summary.activeCategories" tone="info" />
-      <KpiCard label="Orçamento mensal previsto" :value="summary.monthlyBudget" format="currency" tone="warning" />
-      <KpiCard label="Colaboradores elegíveis" :value="summary.eligibleEmployees" tone="success" />
+      <KpiCard label="Categorias ativas" :value="summary.activeCategories" tone="info" icon="layers" />
+      <KpiCard label="Orçamento mensal previsto" :value="summary.monthlyBudget" format="currency" tone="warning" icon="target" />
+      <KpiCard label="Colaboradores elegíveis" :value="summary.eligibleEmployees" tone="success" icon="users" />
     </div>
 
     <div class="tabs">
@@ -40,26 +43,28 @@
 
     <div v-if="tab === 'executive'" class="stack">
       <div class="grid cols-4">
-        <KpiCard label="Previsto total" :value="executive.overview.predictedTotal" format="currency" />
-        <KpiCard label="Realizado total" :value="executive.overview.realizedTotal" format="currency" tone="info" />
+        <KpiCard label="Previsto total" :value="executive.overview.predictedTotal" format="currency" icon="target" />
+        <KpiCard label="Realizado total" :value="executive.overview.realizedTotal" format="currency" tone="info" icon="bar-chart" />
         <KpiCard
           label="Desvio total"
           :value="executive.overview.totalDeviation"
           format="currency"
           :tone="executive.overview.totalDeviation > 0 ? 'danger' : 'success'"
+          icon="trending-up"
         />
         <KpiCard
           label="Uso do orçamento"
           :value="executive.overview.usagePercent"
           format="percent"
           :tone="executive.overview.usagePercent > 100 ? 'danger' : executive.overview.usagePercent > 80 ? 'warning' : 'success'"
+          icon="activity"
         />
       </div>
     </div>
 
     <div v-if="tab === 'deviation'">
-      <EmptyState v-if="!executive.categoryDeviation.length" icon="◐" title="Sem dados de desvio" message="Nenhuma movimentação no período selecionado." />
-      <div v-else class="table-wrapper">
+      <EmptyState v-if="!executive.categoryDeviation.length" icon="bar-chart" title="Sem dados de desvio" message="Nenhuma movimentação no período selecionado." />
+      <div v-else class="table-wrapper scrollable">
         <table>
           <thead>
             <tr>
@@ -75,10 +80,10 @@
             <tr v-for="row in executive.categoryDeviation" :key="'dev-' + row.category">
               <td><strong>{{ row.category }}</strong></td>
               <td>{{ row.costCenter }}</td>
-              <td>R$ {{ row.predicted.toFixed(2) }}</td>
-              <td>R$ {{ row.realized.toFixed(2) }}</td>
-              <td :style="{ color: row.deviation > 0 ? 'var(--brand-danger)' : 'var(--brand-accent)', fontWeight: 700 }">
-                R$ {{ row.deviation.toFixed(2) }}
+              <td>{{ formatCurrency(row.predicted) }}</td>
+              <td>{{ formatCurrency(row.realized) }}</td>
+              <td :class="row.deviation > 0 ? 'text-danger font-bold' : 'text-success font-bold'">
+                {{ formatCurrency(row.deviation) }}
               </td>
               <td>
                 <span class="badge" :class="usageBadge(row.usagePercent)">{{ row.usagePercent.toFixed(1) }}%</span>
@@ -90,8 +95,8 @@
     </div>
 
     <div v-if="tab === 'risk'" class="stack">
-      <EmptyState v-if="!executive.costCenterRiskRanking.length" icon="◐" title="Sem dados de risco" message="Nenhum centro de custo com movimentação no período." />
-      <div v-else class="table-wrapper">
+      <EmptyState v-if="!executive.costCenterRiskRanking.length" icon="target" title="Sem dados de risco" message="Nenhum centro de custo com movimentação no período." />
+      <div v-else class="table-wrapper scrollable">
         <table>
           <thead>
             <tr>
@@ -111,13 +116,13 @@
                 </button>
               </td>
               <td>{{ row.categories }}</td>
-              <td>R$ {{ row.predicted.toFixed(2) }}</td>
-              <td>R$ {{ row.realized.toFixed(2) }}</td>
+              <td>{{ formatCurrency(row.predicted) }}</td>
+              <td>{{ formatCurrency(row.realized) }}</td>
               <td>
                 <span class="badge" :class="usageBadge(row.usagePercent)">{{ row.usagePercent.toFixed(1) }}%</span>
               </td>
-              <td :style="{ color: row.deviation > 0 ? 'var(--brand-danger)' : 'var(--brand-accent)', fontWeight: 700 }">
-                R$ {{ row.deviation.toFixed(2) }}
+              <td :class="row.deviation > 0 ? 'text-danger font-bold' : 'text-success font-bold'">
+                {{ formatCurrency(row.deviation) }}
               </td>
             </tr>
           </tbody>
@@ -125,20 +130,22 @@
       </div>
 
       <div v-if="centerDetails.costCenter" class="card">
-        <div class="page-header">
+        <div class="page-header" style="margin-bottom: 1rem; padding-bottom: 1rem;">
           <div class="page-header__text">
             <h3>Drill-down: {{ centerDetails.costCenter }}</h3>
             <p class="muted">
-              Previsto R$ {{ centerDetails.summary.predicted.toFixed(2) }} ·
-              Realizado R$ {{ centerDetails.summary.realized.toFixed(2) }} ·
+              Previsto {{ formatCurrency(centerDetails.summary.predicted) }} ·
+              Realizado {{ formatCurrency(centerDetails.summary.realized) }} ·
               Uso {{ centerDetails.summary.usagePercent.toFixed(1) }}%
             </p>
           </div>
-          <button class="btn btn-secondary" type="button" @click="clearCenterDetails">Fechar</button>
+          <button class="btn btn-secondary" type="button" @click="clearCenterDetails">
+            <Icon name="x" :size="12" /> Fechar
+          </button>
         </div>
 
-        <h4 style="margin-top: 0.5rem; margin-bottom: 0.75rem;">Categorias impactadas</h4>
-        <div class="table-wrapper" style="margin-bottom: 1rem;">
+        <h4 class="mb-2">Categorias impactadas</h4>
+        <div class="table-wrapper mb-3">
           <table>
             <thead>
               <tr>
@@ -152,16 +159,16 @@
             <tbody>
               <tr v-for="row in centerDetails.categories" :key="'detail-cat-' + row.category">
                 <td><strong>{{ row.category }}</strong></td>
-                <td>R$ {{ row.predicted.toFixed(2) }}</td>
-                <td>R$ {{ row.realized.toFixed(2) }}</td>
-                <td>R$ {{ row.deviation.toFixed(2) }}</td>
+                <td>{{ formatCurrency(row.predicted) }}</td>
+                <td>{{ formatCurrency(row.realized) }}</td>
+                <td>{{ formatCurrency(row.deviation) }}</td>
                 <td>{{ row.usagePercent.toFixed(1) }}%</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <h4 style="margin-bottom: 0.75rem;">Solicitações relacionadas</h4>
+        <h4 class="mb-2">Solicitações relacionadas</h4>
         <div class="table-wrapper">
           <table>
             <thead>
@@ -177,7 +184,7 @@
               <tr v-for="req in centerDetails.requests" :key="'detail-req-' + req.id">
                 <td>{{ req.requesterName }}</td>
                 <td>{{ req.category }}</td>
-                <td>R$ {{ req.amount.toFixed(2) }}</td>
+                <td>{{ formatCurrency(req.amount) }}</td>
                 <td><StatusBadge :status="req.status" /></td>
                 <td class="muted">{{ req.requestedAt }}</td>
               </tr>
@@ -191,8 +198,8 @@
     </div>
 
     <div v-if="tab === 'policies'">
-      <EmptyState v-if="!policies.length" icon="⚙" title="Nenhuma política configurada" message="Cadastre políticas no banco para regras automáticas." />
-      <div v-else class="table-wrapper">
+      <EmptyState v-if="!policies.length" icon="settings" title="Nenhuma política configurada" message="Cadastre políticas no banco para regras automáticas." />
+      <div v-else class="table-wrapper scrollable">
         <table>
           <thead>
             <tr>
@@ -209,8 +216,8 @@
             <tr v-for="p in policies" :key="p.id">
               <td><strong>{{ p.category }}</strong></td>
               <td>{{ p.role }}</td>
-              <td>R$ {{ p.limit.toFixed(2) }}</td>
-              <td>R$ {{ p.maxPerTransaction.toFixed(2) }}</td>
+              <td>{{ formatCurrency(p.limit) }}</td>
+              <td>{{ formatCurrency(p.maxPerTransaction) }}</td>
               <td>
                 <span class="badge" :class="p.requiresApproval ? 'badge-warning' : 'badge-success'">
                   {{ p.requiresApproval ? 'Obrigatória' : 'Automática' }}
@@ -234,6 +241,10 @@ import PageHeader from '../components/PageHeader.vue'
 import KpiCard from '../components/KpiCard.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import EmptyState from '../components/EmptyState.vue'
+import Icon from '../components/Icon.vue'
+
+const formatCurrency = (v) =>
+  Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 const tab = ref('executive')
 const summary = ref({ activeCategories: 0, monthlyBudget: 0, eligibleEmployees: 0 })
@@ -310,6 +321,7 @@ onMounted(load)
   gap: 0.75rem;
   margin-top: 1rem;
   flex-wrap: wrap;
+  align-items: flex-end;
 }
 .period-row .form-group { min-width: 140px; }
 </style>

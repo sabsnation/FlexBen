@@ -19,7 +19,7 @@ import { enforcePolicy, resolvePolicyRule } from './lib/policyEngine.js'
 import { authRequired, adminRequired, roleRequired } from './middleware/auth.js'
 
 const PORT = Number(process.env.PORT || 3333)
-const JWT_SECRET = process.env.JWT_SECRET || 'corpbenefit-dev-secret'
+const JWT_SECRET = process.env.JWT_SECRET || 'flexben-dev-secret'
 const NODE_ENV = process.env.NODE_ENV || 'development'
 const FRONTEND_URLS = (process.env.FRONTEND_URL || '')
   .split(',')
@@ -1283,7 +1283,7 @@ app.use((err, _req, res, _next) => {
 })
 
 const server = app.listen(PORT, () => {
-  console.log(`API CorpBenefit na porta ${PORT} (${NODE_ENV})`)
+  console.log(`API FlexBen na porta ${PORT} (${NODE_ENV})`)
 })
 
 server.on('error', (err) => {

@@ -4,11 +4,11 @@ export const NAV_SECTIONS = Object.freeze([
     title: 'Meus Benefícios',
     roles: ['colaborador', 'gestor', 'administrador', 'financeiro'],
     items: [
-      { to: '/dashboard', label: 'Painel', icon: '▣' },
-      { to: '/realocar', label: 'Realocar créditos', icon: '⇄' },
-      { to: '/utilizacao', label: 'Registrar uso', icon: '◔' },
-      { to: '/transacoes', label: 'Transações', icon: '↻' },
-      { to: '/consulta-categorias', label: 'Categorias', icon: '▤' }
+      { to: '/dashboard', label: 'Painel', icon: 'dashboard' },
+      { to: '/realocar', label: 'Realocar créditos', icon: 'swap' },
+      { to: '/utilizacao', label: 'Registrar uso', icon: 'send' },
+      { to: '/transacoes', label: 'Transações', icon: 'list' },
+      { to: '/consulta-categorias', label: 'Categorias', icon: 'grid' }
     ]
   },
   {
@@ -16,7 +16,7 @@ export const NAV_SECTIONS = Object.freeze([
     title: 'Gestão',
     roles: ['gestor', 'administrador'],
     items: [
-      { to: '/gestor/aprovacoes', label: 'Aprovações', icon: '✓' }
+      { to: '/gestor/aprovacoes', label: 'Aprovações', icon: 'check-circle' }
     ]
   },
   {
@@ -24,11 +24,11 @@ export const NAV_SECTIONS = Object.freeze([
     title: 'RH / Admin',
     roles: ['administrador'],
     items: [
-      { to: '/rh/politicas', label: 'Painel Executivo', icon: '◐' },
-      { to: '/categorias', label: 'Categorias & Limites', icon: '▤' },
-      { to: '/usuarios', label: 'Usuários', icon: '◉' },
-      { to: '/carga', label: 'Carga Mensal', icon: '⇪' },
-      { to: '/auditoria', label: 'Auditoria', icon: '⎘' }
+      { to: '/rh/politicas', label: 'Painel Executivo', icon: 'pie-chart' },
+      { to: '/categorias', label: 'Categorias & Limites', icon: 'layers' },
+      { to: '/usuarios', label: 'Usuários', icon: 'users' },
+      { to: '/carga', label: 'Carga Mensal', icon: 'upload' },
+      { to: '/auditoria', label: 'Auditoria', icon: 'shield' }
     ]
   },
   {
@@ -36,7 +36,7 @@ export const NAV_SECTIONS = Object.freeze([
     title: 'Financeiro',
     roles: ['financeiro', 'administrador'],
     items: [
-      { to: '/financeiro/fechamento', label: 'Fechamento Mensal', icon: '$' }
+      { to: '/financeiro/fechamento', label: 'Fechamento Mensal', icon: 'dollar-sign' }
     ]
   },
   {
@@ -44,7 +44,7 @@ export const NAV_SECTIONS = Object.freeze([
     title: 'Governança',
     roles: ['administrador', 'gestor', 'financeiro'],
     items: [
-      { to: '/base-projeto', label: 'Base Funcional', icon: '☰' }
+      { to: '/base-projeto', label: 'Base Funcional', icon: 'file-text' }
     ]
   }
 ])

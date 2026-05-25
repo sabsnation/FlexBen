@@ -3,15 +3,20 @@
     <PageHeader
       title="Fechamento mensal financeiro"
       subtitle="Consolidação de movimentos aprovados, liquidação contábil e exportação para a contabilidade."
+      eyebrow="Financeiro"
     >
       <template #actions>
-        <button class="btn btn-secondary" type="button" @click="exportCsv">↓ Exportar CSV</button>
+        <button class="btn btn-secondary" type="button" @click="exportCsv">
+          <Icon name="download" :size="14" /> Exportar CSV
+        </button>
         <button
           class="btn btn-primary"
           type="button"
           :disabled="!auth.can('closing_run') || running"
           @click="confirmClose"
         >
+          <Icon v-if="running" name="spinner" :size="14" class="spin" />
+          <Icon v-else name="zap" :size="14" />
           <span v-if="!running">Executar fechamento</span>
           <span v-else>Processando…</span>
         </button>
@@ -31,40 +36,46 @@
             </select>
           </div>
           <div style="align-self: flex-end;">
-            <button class="btn btn-ghost" type="button" @click="load">↻ Atualizar</button>
+            <button class="btn btn-ghost" type="button" @click="load">
+              <Icon name="refresh" :size="14" /> Atualizar
+            </button>
           </div>
         </div>
       </template>
     </PageHeader>
 
     <div class="grid cols-3 mb-3">
-      <KpiCard label="Mês de referência" :value="summary.referenceMonth || '—'" tone="info" />
-      <KpiCard label="Total aprovado" :value="summary.approvedTotal" format="currency" tone="success" />
-      <KpiCard label="Itens em aberto" :value="summary.pendingCount" tone="warning" hint="Aprovados aguardando liquidação." />
+      <KpiCard label="Mês de referência" :value="summary.referenceMonth || '—'" tone="info" icon="calendar" />
+      <KpiCard label="Total aprovado" :value="summary.approvedTotal" format="currency" tone="success" icon="check-circle" />
+      <KpiCard label="Itens em aberto" :value="summary.pendingCount" tone="warning" icon="clock" hint="Aprovados aguardando liquidação." />
     </div>
 
     <div class="grid cols-3 mb-3">
-      <KpiCard label="Orçamento previsto" :value="executive.overview.predictedTotal" format="currency" />
-      <KpiCard label="Realizado" :value="executive.overview.realizedTotal" format="currency" tone="info" />
+      <KpiCard label="Orçamento previsto" :value="executive.overview.predictedTotal" format="currency" icon="target" />
+      <KpiCard label="Realizado" :value="executive.overview.realizedTotal" format="currency" tone="info" icon="bar-chart" />
       <KpiCard
         label="Uso do orçamento"
         :value="executive.overview.usagePercent"
         format="percent"
         :tone="executive.overview.usagePercent > 100 ? 'danger' : executive.overview.usagePercent > 80 ? 'warning' : 'success'"
+        icon="activity"
       />
     </div>
 
     <div v-if="!auth.can('closing_run')" class="notice info">
-      <span>ℹ</span>
+      <Icon class="notice-icon" name="info" :size="18" />
       <span>Apenas perfis financeiro e administrativo podem executar o fechamento.</span>
     </div>
 
     <div class="card mb-3">
       <h3 class="card-title">
-        <span>Consolidação por categoria</span>
-        <span class="muted" style="font-size: 0.8rem;">{{ lines.length }} categoria(s)</span>
+        <span class="title-with-icon">
+          <span class="icon-bg sm"><Icon name="pie-chart" :size="14" /></span>
+          Consolidação por categoria
+        </span>
+        <span class="muted text-xs">{{ lines.length }} categoria(s)</span>
       </h3>
-      <EmptyState v-if="!lines.length" icon="$" title="Sem dados para fechamento" message="Não há movimentações aprovadas no período selecionado." />
+      <EmptyState v-if="!lines.length" icon="dollar-sign" title="Sem dados para fechamento" message="Não há movimentações aprovadas no período selecionado." />
       <div v-else class="table-wrapper" style="border: none; box-shadow: none;">
         <table>
           <thead>
@@ -79,7 +90,7 @@
             <tr v-for="line in lines" :key="line.category">
               <td><strong>{{ line.category }}</strong></td>
               <td>{{ line.count }}</td>
-              <td><strong>R$ {{ line.total.toFixed(2) }}</strong></td>
+              <td><strong>{{ formatCurrency(line.total) }}</strong></td>
               <td>
                 <div class="participation">
                   <div class="participation__bar">
@@ -95,8 +106,13 @@
     </div>
 
     <div class="card mb-3">
-      <h3 class="card-title">Risco por centro de custo</h3>
-      <EmptyState v-if="!executive.costCenterRiskRanking.length" icon="◐" title="Sem dados de risco" message="Nenhum centro de custo movimentado no período." />
+      <h3 class="card-title">
+        <span class="title-with-icon">
+          <span class="icon-bg sm warning"><Icon name="alert-triangle" :size="14" /></span>
+          Risco por centro de custo
+        </span>
+      </h3>
+      <EmptyState v-if="!executive.costCenterRiskRanking.length" icon="target" title="Sem dados de risco" message="Nenhum centro de custo movimentado no período." />
       <div v-else class="table-wrapper" style="border: none; box-shadow: none;">
         <table>
           <thead>
@@ -114,8 +130,8 @@
                   {{ row.costCenter }}
                 </button>
               </td>
-              <td>R$ {{ row.predicted.toFixed(2) }}</td>
-              <td>R$ {{ row.realized.toFixed(2) }}</td>
+              <td>{{ formatCurrency(row.predicted) }}</td>
+              <td>{{ formatCurrency(row.realized) }}</td>
               <td>
                 <span class="badge" :class="usageBadge(row.usagePercent)">{{ row.usagePercent.toFixed(1) }}%</span>
               </td>
@@ -126,16 +142,18 @@
     </div>
 
     <div v-if="centerDetails.costCenter" class="card">
-      <div class="page-header">
+      <div class="page-header" style="margin-bottom: 1rem; padding-bottom: 1rem;">
         <div class="page-header__text">
           <h3>Detalhamento: {{ centerDetails.costCenter }}</h3>
           <p class="muted">
-            Previsto R$ {{ centerDetails.summary.predicted.toFixed(2) }} ·
-            Realizado R$ {{ centerDetails.summary.realized.toFixed(2) }} ·
-            Desvio R$ {{ (centerDetails.summary.deviation || 0).toFixed(2) }}
+            Previsto {{ formatCurrency(centerDetails.summary.predicted) }} ·
+            Realizado {{ formatCurrency(centerDetails.summary.realized) }} ·
+            Desvio {{ formatCurrency(centerDetails.summary.deviation || 0) }}
           </p>
         </div>
-        <button class="btn btn-secondary" type="button" @click="clearCenterDetails">Fechar</button>
+        <button class="btn btn-secondary" type="button" @click="clearCenterDetails">
+          <Icon name="x" :size="12" /> Fechar
+        </button>
       </div>
       <div class="table-wrapper">
         <table>
@@ -152,7 +170,7 @@
             <tr v-for="req in centerDetails.requests" :key="'fin-req-' + req.id">
               <td>{{ req.requesterName }}</td>
               <td>{{ req.category }}</td>
-              <td><strong>R$ {{ req.amount.toFixed(2) }}</strong></td>
+              <td><strong>{{ formatCurrency(req.amount) }}</strong></td>
               <td><StatusBadge :status="req.status" /></td>
               <td class="muted">{{ req.requestedAt }}</td>
             </tr>
@@ -175,6 +193,10 @@ import PageHeader from '../components/PageHeader.vue'
 import KpiCard from '../components/KpiCard.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import EmptyState from '../components/EmptyState.vue'
+import Icon from '../components/Icon.vue'
+
+const formatCurrency = (v) =>
+  Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 const summary = ref({ referenceMonth: '-', approvedTotal: 0, pendingCount: 0 })
 const lines = ref([])
@@ -282,25 +304,27 @@ onMounted(load)
 </script>
 
 <style scoped>
+.title-with-icon { display: inline-flex; align-items: center; gap: 10px; }
 .period-row {
   display: flex;
   gap: 0.75rem;
   margin-top: 1rem;
   flex-wrap: wrap;
+  align-items: flex-end;
 }
 .period-row .form-group { min-width: 140px; }
-.participation { display: flex; align-items: center; gap: 8px; }
+.participation { display: flex; align-items: center; gap: 10px; }
 .participation__bar {
   flex: 1;
   height: 6px;
-  background: #f1f5f9;
-  border-radius: 100px;
+  background: var(--surface-strong);
+  border-radius: var(--radius-full);
   overflow: hidden;
   min-width: 80px;
 }
 .participation span {
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: 700;
   color: var(--text-muted);
   min-width: 44px;
   text-align: right;

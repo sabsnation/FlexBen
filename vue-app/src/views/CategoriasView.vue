@@ -3,20 +3,34 @@
     <PageHeader
       title="Categorias e limites"
       subtitle="Configure os tipos de benefícios flex e os tetos mensais aplicados na carga e nas operações."
+      eyebrow="Administração"
     >
       <template #actions>
-        <button class="btn btn-primary" @click="openCreate">+ Nova categoria</button>
+        <button class="btn btn-primary" @click="openCreate">
+          <Icon name="plus" :size="14" /> Nova categoria
+        </button>
       </template>
     </PageHeader>
 
     <div class="grid cols-3 mb-3">
-      <KpiCard label="Categorias ativas" :value="activeCount" tone="success" />
-      <KpiCard label="Categorias inativas" :value="inactiveCount" tone="warning" />
-      <KpiCard label="Limite total mensal" :value="limitTotal" format="currency" tone="info" :hint="`Por colaborador: R$ ${limitTotal.toFixed(2)}`" />
+      <KpiCard label="Categorias ativas" :value="activeCount" tone="success" icon="check-circle" />
+      <KpiCard label="Categorias inativas" :value="inactiveCount" tone="warning" icon="x-circle" />
+      <KpiCard
+        label="Limite total mensal"
+        :value="limitTotal"
+        format="currency"
+        tone="info"
+        icon="dollar-sign"
+        :hint="`Por colaborador ativo`"
+      />
     </div>
 
     <div v-if="categories.length === 0" class="card">
-      <EmptyState icon="▤" title="Sem categorias cadastradas" message="Adicione a primeira categoria para começar a operar." />
+      <EmptyState icon="layers" title="Sem categorias cadastradas" message="Adicione a primeira categoria para começar a operar.">
+        <button class="btn btn-primary" @click="openCreate">
+          <Icon name="plus" :size="14" /> Nova categoria
+        </button>
+      </EmptyState>
     </div>
 
     <div v-else class="table-wrapper">
@@ -34,10 +48,12 @@
           <tr v-for="c in categories" :key="c.id">
             <td class="muted">#{{ String(c.id).slice(-4) }}</td>
             <td><strong>{{ c.nome }}</strong></td>
-            <td><strong>R$ {{ Number(c.limite).toFixed(2) }}</strong></td>
+            <td><strong>{{ formatCurrency(c.limite) }}</strong></td>
             <td><StatusBadge :status="c.status" /></td>
             <td class="text-right">
-              <button class="btn-icon danger" type="button" @click="handleDelete(c.id, c.nome)" title="Excluir">✕</button>
+              <button class="btn-icon danger" type="button" @click="handleDelete(c.id, c.nome)" title="Excluir">
+                <Icon name="trash" :size="14" />
+              </button>
             </td>
           </tr>
         </tbody>
@@ -59,6 +75,7 @@
       <template #footer>
         <button class="btn btn-secondary" type="button" @click="closeModal">Cancelar</button>
         <button class="btn btn-primary" type="button" :disabled="modal.loading" @click="handleSave">
+          <Icon v-if="modal.loading" name="spinner" :size="14" class="spin" />
           <span v-if="!modal.loading">Adicionar categoria</span>
           <span v-else>Salvando…</span>
         </button>
@@ -77,6 +94,10 @@ import KpiCard from '../components/KpiCard.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import EmptyState from '../components/EmptyState.vue'
 import Modal from '../components/Modal.vue'
+import Icon from '../components/Icon.vue'
+
+const formatCurrency = (v) =>
+  Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 const { categories, addCategory, deleteCategory, loadCategories } = useCategories()
 const { showToast } = useToast()

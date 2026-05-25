@@ -7,9 +7,9 @@
     <aside class="sidebar">
       <div class="sidebar-header">
         <div class="brand-mark">CB</div>
-        <div style="display: flex; flex-direction: column;">
-          <span style="font-weight: 800; font-size: 1.05rem; line-height: 1.1;">CorpBenefit</span>
-          <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 500; letter-spacing: 0.06em;">FLEX 2026</span>
+        <div class="sidebar-brand">
+          <span class="sidebar-brand__name">FlexBen</span>
+          <span class="sidebar-brand__tag">FLEX · 2026</span>
         </div>
       </div>
 
@@ -22,7 +22,9 @@
             :to="item.to"
             class="sidebar-link"
           >
-            <span class="menu-icon">{{ item.icon }}</span>
+            <span class="menu-icon">
+              <Icon :name="item.icon" :size="16" :stroke-width="2" />
+            </span>
             {{ item.label }}
           </RouterLink>
         </div>
@@ -30,14 +32,14 @@
 
       <div class="sidebar-footer">
         <div class="user-mini">
-          <div class="avatar" :style="{ background: roleColor }">{{ initials }}</div>
+          <div class="avatar sm" :style="{ background: roleColor }">{{ initials }}</div>
           <div class="user-mini__info">
             <span class="user-mini__name">{{ user?.nome }}</span>
             <span class="user-mini__role">{{ roleLabel }}</span>
           </div>
         </div>
         <button @click="handleLogout" class="logout-btn" type="button">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <Icon name="logout" :size="14" />
           Sair
         </button>
       </div>
@@ -47,15 +49,20 @@
       <header class="top-header">
         <div class="breadcrumb">
           <span>{{ sectionTitle }}</span>
-          <span v-if="route.name && route.name !== 'Dashboard'" class="divider">/</span>
-          <span v-if="route.name && route.name !== 'Dashboard'" class="current">{{ route.name }}</span>
+          <span v-if="currentLabel && currentLabel !== sectionTitle" class="divider">/</span>
+          <span v-if="currentLabel && currentLabel !== sectionTitle" class="current">{{ currentLabel }}</span>
         </div>
 
-        <div class="user-profile">
-          <div class="avatar" :style="{ background: roleColor }">{{ initials }}</div>
-          <div style="display: flex; flex-direction: column; line-height: 1.1;">
-            <span style="font-size: 0.85rem; font-weight: 700;">{{ user?.nome }}</span>
-            <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: capitalize;">{{ roleLabel }}</span>
+        <div class="topbar-right">
+          <button class="topbar-btn" type="button" aria-label="Notificações">
+            <Icon name="bell" :size="16" />
+          </button>
+          <div class="user-profile">
+            <div class="avatar" :style="{ background: roleColor }">{{ initials }}</div>
+            <div class="user-profile__info hide-mobile">
+              <span class="user-profile__name">{{ user?.nome }}</span>
+              <span class="user-profile__role">{{ roleLabel }}</span>
+            </div>
           </div>
         </div>
       </header>
@@ -66,14 +73,13 @@
 
   <Transition name="toast">
     <div v-if="toast.visible" class="toast-overlay" :class="toast.type">
-      <div class="toast-content">
-        <span style="font-size: 1.1rem;">
-          <span v-if="toast.type === 'success'">✓</span>
-          <span v-else-if="toast.type === 'error'">!</span>
-          <span v-else>i</span>
-        </span>
-        <span>{{ toast.message }}</span>
-      </div>
+      <span class="toast-icon">
+        <Icon
+          :name="toast.type === 'success' ? 'check' : toast.type === 'error' ? 'alert-circle' : 'info'"
+          :size="16"
+        />
+      </span>
+      <span>{{ toast.message }}</span>
     </div>
   </Transition>
 </template>
@@ -85,6 +91,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { computed, onMounted } from 'vue'
 import { getToken } from './api'
 import { NAV_SECTIONS } from './config/navigation'
+import Icon from './components/Icon.vue'
 
 const { user, role, isAuthenticated, logout, refreshMe } = useAuth()
 const { toast } = useToast()
@@ -119,16 +126,22 @@ const visibleSections = computed(() =>
     .filter((section) => section.items.length > 0)
 )
 
-const sectionTitle = computed(() => {
-  const found = visibleSections.value.find((s) => s.items.some((i) => i.to === route.path))
-  return found ? found.title : 'Início'
+const currentItem = computed(() => {
+  for (const section of visibleSections.value) {
+    const found = section.items.find((i) => i.to === route.path)
+    if (found) return { section, item: found }
+  }
+  return null
 })
 
+const sectionTitle = computed(() => currentItem.value?.section.title || 'Início')
+const currentLabel = computed(() => currentItem.value?.item.label || (route.name || ''))
+
 const roleColor = computed(() => {
-  if (role.value === 'administrador') return '#6366f1'
-  if (role.value === 'gestor') return '#0ea5e9'
-  if (role.value === 'financeiro') return '#f59e0b'
-  return '#10b981'
+  if (role.value === 'administrador') return 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)'
+  if (role.value === 'gestor') return 'linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%)'
+  if (role.value === 'financeiro') return 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+  return 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
 })
 
 const roleLabel = computed(() => {
@@ -151,17 +164,40 @@ const initials = computed(() => {
 
 <style scoped>
 .brand-mark {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
   color: white;
-  border-radius: 8px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
+  font-size: 1rem;
   letter-spacing: -0.02em;
-  box-shadow: 0 4px 14px -4px rgba(99, 102, 241, 0.6);
+  box-shadow: 0 8px 20px -8px rgba(99, 102, 241, 0.7);
+  flex-shrink: 0;
+}
+
+.sidebar-brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+.sidebar-brand__name {
+  color: white;
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand__tag {
+  color: #94a3b8;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-top: 2px;
 }
 
 .user-mini {
@@ -171,6 +207,7 @@ const initials = computed(() => {
   padding: 0.6rem 0.7rem;
   background: rgba(255, 255, 255, 0.04);
   border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.04);
   margin-bottom: 0.6rem;
 }
 .user-mini__info { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; flex: 1; }
@@ -183,8 +220,12 @@ const initials = computed(() => {
   text-overflow: ellipsis;
 }
 .user-mini__role {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  margin-top: 1px;
 }
 
 .logout-btn {
@@ -193,15 +234,68 @@ const initials = computed(() => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 0.6rem 0.85rem;
+  padding: 0.65rem 0.85rem;
   border-radius: var(--radius-sm);
-  background: rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.12);
   color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  border: 1px solid rgba(239, 68, 68, 0.22);
   cursor: pointer;
   font-weight: 600;
   font-size: 0.82rem;
+  font-family: inherit;
   transition: var(--transition);
 }
-.logout-btn:hover { background: rgba(239, 68, 68, 0.25); color: #fecaca; }
+.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.22);
+  color: #fecaca;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.topbar-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: var(--shadow-sm);
+}
+.topbar-btn:hover {
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.user-profile__info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+.user-profile__name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  white-space: nowrap;
+}
+.user-profile__role {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  margin-top: 1px;
+}
 </style>

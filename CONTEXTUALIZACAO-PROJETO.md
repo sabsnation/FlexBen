@@ -1,4 +1,4 @@
-# Contextualização do projeto FlexBen (CorpBenefit Flex)
+# Contextualização do projeto FlexBen
 
 > **Para humanos e assistentes de IA:** a **raiz deste repositório** é o projeto completo. Edite e execute tudo a partir da pasta `projeto/` (sem subpasta `FlexBen/`).
 
@@ -86,5 +86,5 @@ kill $(lsof -t -i:3333) 2>/dev/null
 | Nome | Uso |
 |------|-----|
 | **FlexBen** | Nome do produto |
-| **CorpBenefit Flex** | Nome na UI |
-| `corpbenefit-workspace` | Pacote npm raiz |
+| **FlexBen** | Nome na UI |
+| `flexben-workspace` | Pacote npm raiz |

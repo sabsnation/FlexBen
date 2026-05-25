@@ -1,6 +1,6 @@
 # Deploy — Render (API) + Vercel (frontend)
 
-Guia oficial do **FlexBen / CorpBenefit Flex**. Cobre:
+Guia oficial do **FlexBen**. Cobre:
 
 - Vercel (frontend Vue)
 - Render (backend Node + PostgreSQL)

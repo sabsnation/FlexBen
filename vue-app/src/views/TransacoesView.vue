@@ -5,23 +5,35 @@
       subtitle="Créditos, realocações e utilizações do seu benefício flex interno."
     >
       <template #actions>
-        <button class="btn btn-secondary" @click="exportCSV">↓ Exportar CSV</button>
+        <button class="btn btn-secondary" @click="exportCSV">
+          <Icon name="download" :size="14" /> Exportar CSV
+        </button>
       </template>
     </PageHeader>
 
     <div class="grid cols-4 mb-3">
-      <KpiCard label="Total registrado" :value="filteredTransactions.length" tone="info" :hint="`de ${transactions.length} no total`" />
-      <KpiCard label="Total créditos" :value="totalIn" format="currency" tone="success" />
-      <KpiCard label="Total saídas" :value="totalOut" format="currency" tone="warning" />
-      <KpiCard label="Saldo período" :value="totalIn - totalOut" format="currency" :tone="(totalIn - totalOut) >= 0 ? 'success' : 'danger'" />
+      <KpiCard label="Total registrado" :value="filteredTransactions.length" tone="info" icon="list" :hint="`de ${transactions.length} no total`" />
+      <KpiCard label="Total créditos" :value="totalIn" format="currency" tone="success" icon="arrow-down" />
+      <KpiCard label="Total saídas" :value="totalOut" format="currency" tone="warning" icon="arrow-up" />
+      <KpiCard label="Saldo período" :value="totalIn - totalOut" format="currency" :tone="(totalIn - totalOut) >= 0 ? 'success' : 'danger'" icon="dollar-sign" />
     </div>
 
     <div class="card mb-3">
-      <h3 class="card-title">Filtros</h3>
+      <h3 class="card-title">
+        <span class="title-with-icon">
+          <span class="icon-bg sm"><Icon name="filter" :size="14" /></span>
+          Filtros
+        </span>
+        <button v-if="hasFilters" class="btn-link" type="button" @click="clearFilters">Limpar tudo</button>
+      </h3>
+
       <div class="form-row">
         <div class="form-group">
           <label>Buscar</label>
-          <input type="text" v-model="filters.search" placeholder="Descrição ou categoria…" />
+          <div class="input-wrap">
+            <Icon name="search" :size="14" class="input-icon" />
+            <input type="text" v-model="filters.search" placeholder="Descrição ou categoria…" />
+          </div>
         </div>
         <div class="form-group">
           <label>Tipo</label>
@@ -50,16 +62,17 @@
           </select>
         </div>
       </div>
-      <div class="actions" style="margin-top: 0.5rem;">
-        <button class="btn btn-ghost" type="button" @click="clearFilters">Limpar filtros</button>
-      </div>
     </div>
 
     <div v-if="filteredTransactions.length === 0" class="card">
-      <EmptyState icon="↻" title="Nenhuma transação encontrada" message="Ajuste os filtros ou registre uma nova movimentação." />
+      <EmptyState
+        icon="inbox"
+        title="Nenhuma transação encontrada"
+        message="Ajuste os filtros ou registre uma nova movimentação."
+      />
     </div>
 
-    <div v-else class="table-wrapper">
+    <div v-else class="table-wrapper scrollable">
       <table>
         <thead>
           <tr>
@@ -75,44 +88,49 @@
         <tbody>
           <template v-for="item in filteredTransactions" :key="item.id">
             <tr>
-              <td class="muted" style="white-space: nowrap;">{{ item.data }}</td>
+              <td class="muted nowrap">{{ item.data }}</td>
               <td><strong>{{ item.descricao || '—' }}</strong></td>
-              <td>
-                <StatusBadge :status="item.tipo" />
-              </td>
+              <td><StatusBadge :status="item.tipo" /></td>
               <td>{{ item.categoria }}</td>
-              <td :style="{ fontWeight: 700, color: item.tipo === 'Entrada' ? '#10b981' : '#1e293b', whiteSpace: 'nowrap' }">
-                {{ item.tipo === 'Saída' ? '−' : '+' }} R$ {{ item.valor.toFixed(2) }}
+              <td :class="['amount', item.tipo === 'Entrada' ? 'in' : 'out']">
+                {{ item.tipo === 'Saída' ? '−' : '+' }} {{ formatCurrency(item.valor) }}
               </td>
-              <td>
-                <StatusBadge :status="item.status" />
-              </td>
+              <td><StatusBadge :status="item.status" /></td>
               <td>
                 <div class="actions" style="gap: 4px;">
-                  <button class="btn-icon" @click="openWorkflow(item.id)" :title="workflow.transactionId === item.id && workflow.open ? 'Fechar fluxo' : 'Ver fluxo'">
-                    {{ workflow.transactionId === item.id && workflow.open ? '×' : '◐' }}
+                  <button
+                    class="btn-icon"
+                    :class="{ primary: workflow.transactionId === item.id && workflow.open }"
+                    @click="openWorkflow(item.id)"
+                    :title="workflow.transactionId === item.id && workflow.open ? 'Fechar fluxo' : 'Ver fluxo'"
+                  >
+                    <Icon :name="workflow.transactionId === item.id && workflow.open ? 'chevron-up' : 'eye'" :size="14" />
                   </button>
-                  <button class="btn-icon danger" @click="handleDelete(item.id)" title="Excluir">✕</button>
+                  <button class="btn-icon danger" @click="handleDelete(item.id)" title="Excluir">
+                    <Icon name="trash" :size="14" />
+                  </button>
                 </div>
               </td>
             </tr>
             <tr v-if="workflow.open && workflow.transactionId === item.id">
-              <td colspan="7" style="background: var(--surface-soft);">
-                <div v-if="workflow.loading" class="muted text-center" style="padding: 1rem;">Carregando trilha…</div>
+              <td colspan="7" class="workflow-cell">
+                <div v-if="workflow.loading" class="muted text-center" style="padding: 1rem;">
+                  <Icon name="spinner" :size="14" class="spin" /> Carregando trilha…
+                </div>
                 <div v-else-if="workflow.events.length === 0" class="muted text-center" style="padding: 1rem;">
                   Sem eventos de workflow registrados.
                 </div>
-                <div v-else class="timeline" style="padding: 0.5rem 0 0.5rem 22px;">
+                <div v-else class="timeline" style="padding: 0.5rem 0 0.5rem 24px;">
                   <div v-for="event in workflow.events" :key="event.id" class="timeline-item">
                     <div class="timeline-dot" :style="{ background: dotColor(event.toStatus) }"></div>
                     <div class="timeline-content">
-                      <div style="display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+                      <div class="event-row">
                         <div>
                           <strong>{{ event.fromStatus || 'Iniciado' }} → {{ event.toStatus }}</strong>
-                          <div class="muted" style="margin-top: 2px;">por {{ event.actorEmail }}</div>
+                          <div class="muted" style="margin-top: 2px; font-size: 0.78rem;">por {{ event.actorEmail }}</div>
                           <div v-if="event.note" style="margin-top: 4px; font-size: 0.85rem;">{{ event.note }}</div>
                         </div>
-                        <div class="muted" style="white-space: nowrap;">{{ formatDate(event.createdAt) }}</div>
+                        <div class="muted nowrap text-xs">{{ formatDate(event.createdAt) }}</div>
                       </div>
                     </div>
                   </div>
@@ -135,6 +153,7 @@ import PageHeader from '../components/PageHeader.vue'
 import KpiCard from '../components/KpiCard.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import EmptyState from '../components/EmptyState.vue'
+import Icon from '../components/Icon.vue'
 
 const { transactions, deleteTransaction, loadMine, getWorkflowHistory } = useTransactions()
 const { showToast } = useToast()
@@ -148,6 +167,8 @@ const categoryNames = computed(() => [...new Set(categories.value.map((c) => c.n
 
 const filters = reactive({ search: '', type: '', category: '', status: '' })
 const workflow = reactive({ open: false, loading: false, transactionId: null, events: [] })
+
+const hasFilters = computed(() => filters.search || filters.type || filters.category || filters.status)
 
 const filteredTransactions = computed(() => {
   return transactions.value.filter((t) => {
@@ -183,6 +204,8 @@ const formatDate = (iso) => {
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleString('pt-BR')
 }
+const formatCurrency = (v) =>
+  Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 const dotColor = (status) => {
   const x = String(status || '').toLowerCase()
@@ -253,3 +276,32 @@ const exportCSV = () => {
   showToast(`CSV gerado (${rows.length} registros).`, 'success')
 }
 </script>
+
+<style scoped>
+.title-with-icon { display: inline-flex; align-items: center; gap: 10px; }
+.input-wrap { position: relative; }
+.input-wrap input { padding-left: 2.25rem; }
+.input-icon {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  color: var(--text-subtle);
+  pointer-events: none;
+}
+.amount { font-weight: 700; white-space: nowrap; }
+.amount.in { color: var(--brand-accent); }
+.amount.out { color: var(--text-strong); }
+
+.workflow-cell {
+  background: var(--surface-soft);
+  padding: 0.5rem 1rem !important;
+}
+.event-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+</style>

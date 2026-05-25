@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'corpbenefit-dev-secret'
+const JWT_SECRET = process.env.JWT_SECRET || 'flexben-dev-secret'
 
 export function authRequired(req, res, next) {
   const raw = req.headers.authorization || ''
