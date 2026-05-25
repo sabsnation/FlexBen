@@ -1,9 +1,34 @@
-import { createAuditAdapter, isFirebaseCredentialEnvSet } from '../adapters/audit/createAuditAdapter.js'
+import {
+  createAuditAdapter,
+  isFirebaseCredentialEnvSet,
+  isMongoCredentialEnvSet
+} from '../adapters/audit/createAuditAdapter.js'
 
-export { isFirebaseCredentialEnvSet }
+export { isFirebaseCredentialEnvSet, isMongoCredentialEnvSet }
 
+function getProviderName() {
+  const explicit = (process.env.AUDIT_PROVIDER || '').trim().toLowerCase()
+  if (explicit === 'firestore') return 'firestore'
+  if (explicit === 'mongo' || explicit === 'mongodb') return 'mongo'
+  if (explicit === 'noop' || explicit === 'off') return 'noop'
+  if (isMongoCredentialEnvSet()) return 'mongo'
+  if (isFirebaseCredentialEnvSet()) return 'firestore'
+  return 'noop'
+}
+
+export function getAuditProvider() {
+  return getProviderName()
+}
+
+export function isAuditReady() {
+  const adapter = createAuditAdapter()
+  const ready = adapter.isReady?.()
+  return ready === true
+}
+
+// compat (código antigo do server.js)
 export function isFirestoreReady() {
-  return createAuditAdapter().isReady()
+  return getProviderName() === 'firestore' && isAuditReady()
 }
 
 export function getFirestoreInitError() {

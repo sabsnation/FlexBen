@@ -1,7 +1,8 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: corpbenefit-pg
+    container_name: flexben-pg
+    restart: unless-stopped
     environment:
       POSTGRES_USER: corp
       POSTGRES_PASSWORD: corp
@@ -9,7 +10,27 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - corp_pg_data:/var/lib/postgresql/data
+      - flexben_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U corp -d corpbenefit"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongo:
+    image: mongo:7
+    container_name: flexben-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: corp
+      MONGO_INITDB_ROOT_PASSWORD: corp
+      MONGO_INITDB_DATABASE: flexben
+    ports:
+      - "27017:27017"
+    volumes:
+      - flexben_mongo_data:/data/db
+    profiles: ["audit", "mongo"]
 
 volumes:
-  corp_pg_data:
+  flexben_pg_data:
+  flexben_mongo_data:

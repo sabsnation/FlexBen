@@ -9,6 +9,9 @@ import {
   fetchRecentAudit,
   isFirestoreReady,
   isFirebaseCredentialEnvSet,
+  isMongoCredentialEnvSet,
+  isAuditReady,
+  getAuditProvider,
   getFirestoreInitError
 } from './lib/audit.js'
 import { logBusinessEvent } from './lib/businessAudit.js'
@@ -179,9 +182,10 @@ app.get(
       uptimeSeconds: Math.round(process.uptime()),
       env: NODE_ENV,
       database: process.env.DATABASE_URL?.startsWith('postgres') ? 'postgresql' : 'configured',
-      firestoreAudit: process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_SERVICE_ACCOUNT_PATH
-        ? 'configured'
-        : 'off',
+      audit: {
+        provider: getAuditProvider(),
+        ready: isAuditReady()
+      },
       timestamp: new Date().toISOString()
     })
   })
@@ -781,8 +785,10 @@ app.get(
     const events = await fetchRecentAudit(100)
     res.json({
       events,
+      provider: getAuditProvider(),
+      ready: isAuditReady(),
       firestoreEnabled: isFirestoreReady(),
-      credentialConfigured: isFirebaseCredentialEnvSet(),
+      credentialConfigured: isFirebaseCredentialEnvSet() || isMongoCredentialEnvSet(),
       firebaseInitError: getFirestoreInitError()?.message || null
     })
   })

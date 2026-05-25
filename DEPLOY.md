@@ -1,138 +1,162 @@
 # Deploy — Render (API) + Vercel (frontend)
 
-Guia para publicar o **FlexBen / CorpBenefit Flex**.
+Guia oficial do **FlexBen / CorpBenefit Flex**. Cobre:
 
-| Serviço | Hospeda | URL típica |
-|---------|---------|------------|
+- Vercel (frontend Vue)
+- Render (backend Node + PostgreSQL)
+- Auditoria opcional: Firestore ou MongoDB (Atlas)
+- Desenvolvimento local com Docker Compose (Postgres + Mongo)
+
+| Serviço | Função | URL típica |
+|---------|--------|------------|
+| **Vercel** | Frontend Vue (SPA) | `https://flexben.vercel.app` |
 | **Render** | Backend Node.js + PostgreSQL | `https://flexben-api.onrender.com` |
-| **Vercel** | Frontend Vue (SPA) | `https://seu-app.vercel.app` |
+| **MongoDB Atlas** | Auditoria NoSQL (opcional) | `mongodb+srv://...` |
+| **Firebase Firestore** | Auditoria NoSQL (opcional) | gerenciado |
 
 ---
 
-## Pré-requisitos
+## 1. Frontend na Vercel
 
-1. Repositório no **GitHub** (ou GitLab) com o código na raiz (`backend/`, `vue-app/`).
-2. Conta em [render.com](https://render.com) e [vercel.com](https://vercel.com).
+### Configuração (Project Settings)
 
-> O backend em produção usa **PostgreSQL** (não SQLite). O plano free do Render inclui banco Postgres.
+| Campo | Valor |
+|-------|-------|
+| **Framework Preset** | Other (detecta pelo `vercel.json` da raiz) |
+| **Root Directory** | `.` |
+| **Install Command** | _herdado do `vercel.json`_ |
+| **Build Command** | _herdado do `vercel.json`_ |
+| **Output Directory** | _herdado do `vercel.json`_ |
+
+### Variáveis de ambiente (Production)
+
+| Nome | Valor |
+|------|-------|
+| `VITE_API_BASE_URL` | `https://flexben-api.onrender.com/api` |
+
+### Comandos (caso prefira manual, Root = `vue-app`)
+
+| Campo | Valor |
+|-------|-------|
+| **Install Command** | `npm install` |
+| **Build Command** | `npm run build` |
+| **Output Directory** | `dist` |
 
 ---
 
-## Parte 1 — Backend no Render
+## 2. Backend no Render
 
 ### Opção A — Blueprint (recomendado)
 
-1. No Render: **New → Blueprint**.
-2. Conecte o repositório e selecione o arquivo `render.yaml` na raiz.
-3. Aplique o blueprint (cria **flexben-api** + **flexben-db**).
-4. Após o deploy, copie a URL do serviço web, ex.:  
-   `https://flexben-api.onrender.com`
+1. [dashboard.render.com](https://dashboard.render.com) → **New → Blueprint**
+2. Conecte `sabsnation/FlexBen` → o `render.yaml` é detectado
+3. Cria automaticamente:
+   - **flexben-db** (PostgreSQL free)
+   - **flexben-api** (Web Service Node)
+4. Preencha `FRONTEND_URL` com a URL da Vercel
+5. **Apply** → aguarde ~3–5 min
 
-### Opção B — Manual
-
-1. **New → PostgreSQL** (free) → anote a **Internal Database URL**.
-2. **New → Web Service**:
-   - **Root Directory:** `backend`
-   - **Build Command:**  
-     `npm install && npx prisma generate && npx prisma migrate deploy && npm run db:seed`
-   - **Start Command:** `npm start`
-   - **Health Check Path:** `/api/health`
-
-3. **Environment variables:**
-
-| Variável | Valor |
-|----------|--------|
-| `NODE_ENV` | `production` |
-| `DATABASE_URL` | URL do Postgres (Render preenche se vincular o banco) |
-| `JWT_SECRET` | string longa aleatória (Render pode gerar) |
-| `FRONTEND_URL` | URL da Vercel (passo 2 abaixo), ex. `https://flexben.vercel.app` |
-
-4. Deploy e teste:  
-   `https://SUA-API.onrender.com/api/health` → deve retornar `{"ok":true,...}`
-
-### Contas demo após o seed
-
-Senha: **`123`**
-
-- `sabrina.admin@empresa.com` (admin)
-- `joao.silva@empresa.com` (colaborador)
-- `gestor@empresa.com` (gestor)
-- `financeiro@empresa.com` (financeiro)
-
-> No plano **free**, o serviço “dorme” após inatividade; a primeira requisição pode levar ~30–60 s.
-
----
-
-## Parte 2 — Frontend na Vercel
-
-1. **Add New → Project** → importe o mesmo repositório.
-2. Configuração do projeto:
+### Opção B — Manual (Web Service)
 
 | Campo | Valor |
-|-------|--------|
-| **Framework Preset** | Other (ou deixe detectar o `vercel.json` na raiz) |
-| **Root Directory** | `.` (raiz do repo — o `vercel.json` já aponta para `vue-app/`) |
+|-------|-------|
+| **Environment** | Node |
+| **Region** | Oregon (ou mais próxima) |
+| **Branch** | `main` |
+| **Root Directory** | `backend` |
+| **Build Command** | `npm install && npx prisma generate && npx prisma migrate deploy && npm run db:seed` |
+| **Start Command** | `npm start` |
+| **Health Check Path** | `/api/health` |
+| **Auto-Deploy** | On |
+| **Plan** | Free |
 
-> **Importante:** se o Root Directory estiver `vue-app` *e* o build falhar com `vite: command not found`, volte para a **raiz** (`.`) ou use só o `vercel.json` da raiz do repositório.
+Primeiro crie um **PostgreSQL** em **New → PostgreSQL** (plano free) e copie a **Internal Database URL**.
 
-Alternativa manual (sem `vercel.json` na raiz):
+### Variáveis de ambiente do backend
 
-| Campo | Valor |
-|-------|--------|
-| **Root Directory** | `vue-app` |
-| **Build Command** | `npm run build` |
-| **Output Directory** | `dist` |
-| **Install Command** | `npm install` |
+| Nome | Valor | Obrigatória |
+|------|-------|------------|
+| `NODE_ENV` | `production` | sim |
+| `NODE_VERSION` | `20` | sim |
+| `DATABASE_URL` | Internal URL do Postgres | sim |
+| `JWT_SECRET` | string aleatória longa | sim |
+| `FRONTEND_URL` | URL da Vercel (sem `/` final) | sim em produção |
+| `AUDIT_PROVIDER` | `firestore` ou `mongo` ou `noop` (opcional) | não |
+| `FIREBASE_SERVICE_ACCOUNT` | JSON da service account em 1 linha | só se Firestore |
+| `MONGODB_URI` | string `mongodb+srv://...` | só se MongoDB |
+| `MONGODB_DB` | nome do DB | só se MongoDB |
 
-3. **Importante — pasta `vue-app` no GitHub**
-
-   O frontend precisa estar **versionado como arquivos normais**, não como submódulo Git. Se o build falhar com `vue-app/package.json` não encontrado, no seu PC:
-
-   ```bash
-   git rm --cached vue-app
-   git add vue-app/
-   git commit -m "fix: incluir vue-app no repositório (remover submódulo)"
-   git push
-   ```
-
-5. **Environment Variables** (Production):
-
-| Nome | Valor |
-|------|--------|
-| `VITE_API_BASE_URL` | `https://SUA-API.onrender.com/api` |
-
-(substitua pela URL real do Render, **com** `/api` no final)
-
-6. **Deploy**.
-
-7. Copie a URL da Vercel (ex. `https://flexben.vercel.app`).
+> No plano **free**, o serviço “dorme” após ~15 min sem uso. A primeira requisição pode levar ~30–60 s.
 
 ---
 
-## Parte 3 — Ligar front e back
+## 3. Health check
 
-1. No **Render**, edite o serviço **flexben-api** e atualize:
+Endpoint: **`GET /api/health`**
 
-   `FRONTEND_URL` = `https://SUA-URL.vercel.app`
+Resposta esperada:
 
-   (sem barra no final; para preview branches, use vírgula:  
-   `https://flexben.vercel.app,https://flexben-xxx.vercel.app`)
-
-2. **Redeploy** do backend no Render.
-
-3. Abra a Vercel, faça login com uma conta demo e valide o fluxo.
-
----
-
-## Desenvolvimento local (com Postgres)
-
-SQLite foi trocado por Postgres no schema. Para desenvolver localmente:
-
-```bash
-docker compose up -d
+```json
+{
+  "ok": true,
+  "uptimeSeconds": 42,
+  "env": "production",
+  "database": "postgresql",
+  "audit": { "provider": "noop", "ready": false },
+  "timestamp": "2026-05-25T16:10:00.000Z"
+}
 ```
 
-No `backend/.env`:
+Use para:
+
+- Render: já configurado em `healthCheckPath`
+- Monitoramento externo (UptimeRobot, BetterStack, etc.)
+
+---
+
+## 4. Auditoria — Firestore ou MongoDB
+
+O backend tem 3 adapters (padrão Adapter):
+
+| Provider | Quando usar | Vars |
+|----------|-------------|------|
+| `noop` | Sem auditoria persistente | (nenhuma) |
+| `firestore` | Já uso Firebase | `FIREBASE_SERVICE_ACCOUNT` |
+| `mongo` | Quero NoSQL gerenciado fora do Google | `MONGODB_URI` + `MONGODB_DB` |
+
+Seleção:
+
+- Defina `AUDIT_PROVIDER` (explícito) **ou**
+- Deixe o factory auto-detectar pelas credenciais
+
+### Firestore (Firebase)
+
+1. Firebase Console → Engrenagem → Contas de serviço → **Gerar nova chave privada**
+2. No Render, cole o JSON em **uma linha** na variável `FIREBASE_SERVICE_ACCOUNT`
+3. Habilite o **Firestore Database**
+
+### MongoDB Atlas
+
+1. [cloud.mongodb.com](https://cloud.mongodb.com) → crie cluster free **M0**
+2. Em **Network Access**, libere `0.0.0.0/0` (ou IPs do Render)
+3. Em **Database Access**, crie usuário/senha
+4. Em **Connect → Drivers**, copie a connection string (`mongodb+srv://...`)
+5. No Render:
+   - `MONGODB_URI` = a string completa
+   - `MONGODB_DB` = `flexben`
+6. Pronto — o adapter cria a coleção `audit_events` automaticamente
+
+---
+
+## 5. Desenvolvimento local
+
+### Postgres (sempre)
+
+```bash
+docker compose up -d postgres
+```
+
+`backend/.env`:
 
 ```env
 DATABASE_URL="postgresql://corp:corp@localhost:5432/corpbenefit"
@@ -140,30 +164,71 @@ JWT_SECRET="dev-local"
 PORT=3333
 ```
 
+### MongoDB (apenas se for testar auditoria)
+
+```bash
+docker compose --profile audit up -d
+```
+
+`backend/.env` adicional:
+
+```env
+AUDIT_PROVIDER=mongo
+MONGODB_URI="mongodb://corp:corp@localhost:27017/flexben?authSource=admin"
+MONGODB_DB=flexben
+```
+
+### Subir tudo
+
 ```bash
 cd backend
+npm install
 npm run db:migrate
 npm run db:seed
 npm run dev
 ```
 
-No `vue-app/.env`:
+Frontend:
 
-```env
-VITE_API_BASE_URL=http://127.0.0.1:3333/api
+```bash
+cd vue-app
+npm install
+echo "VITE_API_BASE_URL=http://127.0.0.1:3333/api" > .env.local
+npm run dev
 ```
 
 ---
 
-## Checklist pós-deploy
+## 6. Contas demo (após seed)
 
-- [ ] `GET /api/health` no Render retorna `ok: true`
-- [ ] Login na Vercel funciona
-- [ ] `FRONTEND_URL` no Render aponta para a URL da Vercel
-- [ ] `VITE_API_BASE_URL` na Vercel aponta para `https://...onrender.com/api`
+Senha: **`123`**
+
+| Email | Perfil |
+|-------|--------|
+| `sabrina.admin@empresa.com` | administrador |
+| `joao.silva@empresa.com` | colaborador |
+| `gestor@empresa.com` | gestor |
+| `financeiro@empresa.com` | financeiro |
 
 ---
 
-## Firebase (opcional)
+## 7. Checklist pós-deploy
 
-Auditoria Firestore continua opcional. No Render, use `FIREBASE_SERVICE_ACCOUNT` com o JSON da service account em **uma linha** (variável secreta).
+- [ ] `GET /api/health` retorna `ok: true` no Render
+- [ ] `database: "postgresql"` no health
+- [ ] Login na Vercel funciona
+- [ ] `FRONTEND_URL` no Render = URL da Vercel
+- [ ] `VITE_API_BASE_URL` na Vercel = `https://...onrender.com/api`
+- [ ] (Opcional) `audit.provider` no health = `firestore` ou `mongo`
+
+---
+
+## 8. Troubleshooting rápido
+
+| Sintoma | Causa provável | Correção |
+|---------|----------------|----------|
+| Vercel `vite: command not found` | Root errado ou vue-app não versionado | Root = `.` e commitar `vue-app/` |
+| Vercel `package.json não encontrado` | `vue-app` era submódulo | `git rm --cached vue-app && git add vue-app/` |
+| Render `prisma migrate` falha | `DATABASE_URL` errada / Postgres não criado | Vincular `flexben-db` no Blueprint |
+| Login retorna CORS | `FRONTEND_URL` não preenchida | Atualizar variável e redeploy |
+| Auditoria não grava | `AUDIT_PROVIDER`/credencial faltando | Conferir `/api/health.audit.ready` |
