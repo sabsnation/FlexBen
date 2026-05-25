@@ -176,8 +176,13 @@ app.get(
     await prisma.$queryRaw`SELECT 1`
     res.json({
       ok: true,
-      database: 'sqlite-local',
-      firestoreAudit: process.env.FIREBASE_SERVICE_ACCOUNT ? 'configured' : 'off'
+      uptimeSeconds: Math.round(process.uptime()),
+      env: NODE_ENV,
+      database: process.env.DATABASE_URL?.startsWith('postgres') ? 'postgresql' : 'configured',
+      firestoreAudit: process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_SERVICE_ACCOUNT_PATH
+        ? 'configured'
+        : 'off',
+      timestamp: new Date().toISOString()
     })
   })
 )
