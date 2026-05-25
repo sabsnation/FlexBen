@@ -6,7 +6,14 @@
     "install:all": "npm --prefix ./backend install && npm --prefix ./vue-app install",
     "dev:backend": "npm --prefix ./backend run dev",
     "dev:frontend": "npm --prefix ./vue-app run dev",
-    "dev": "concurrently -n BACKEND,FRONTEND -c blue,green \"npm --prefix ./backend run dev\" \"npm --prefix ./vue-app run dev\""
+    "dev": "concurrently -n BACKEND,FRONTEND -c blue,green \"npm --prefix ./backend run dev\" \"npm --prefix ./vue-app run dev\"",
+    "build:backend": "npm --prefix ./backend install && npx --prefix ./backend prisma generate --schema=./backend/prisma/schema.prisma && npx --prefix ./backend prisma migrate deploy --schema=./backend/prisma/schema.prisma && npm --prefix ./backend run db:seed",
+    "start:backend": "npm --prefix ./backend start",
+    "render:build": "cd backend && npm install && npx prisma generate && npx prisma migrate deploy && npm run db:seed",
+    "render:start": "cd backend && npm start"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
