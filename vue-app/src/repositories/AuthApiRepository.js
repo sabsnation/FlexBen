@@ -20,6 +20,14 @@ export class AuthApiRepository {
   async recoverPassword(email) {
     return this.client.post('/auth/recover', { email })
   }
+
+  async updateProfile(payload) {
+    return this.client.patch('/auth/profile', payload)
+  }
+
+  async changePassword(currentPassword, newPassword) {
+    return this.client.patch('/auth/password', { currentPassword, newPassword })
+  }
 }
 
 export const authRepository = new AuthApiRepository()

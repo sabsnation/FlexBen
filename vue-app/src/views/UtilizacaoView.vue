@@ -98,13 +98,12 @@ import { useCategories } from '../categories'
 import { useTransactions } from '../transactions'
 import { useAuth } from '../auth'
 import { useToast } from '../toast'
-import { balanceForCategory } from '../services/transactionService'
 import PageHeader from '../components/PageHeader.vue'
 import Icon from '../components/Icon.vue'
 
 const router = useRouter()
 const { categories, loadCategories } = useCategories()
-const { registerUsage, loadMine, allTransactions } = useTransactions()
+const { registerUsage, loadMine, loadMyBalances, categoryBalance } = useTransactions()
 const auth = useAuth()
 const { showToast } = useToast()
 
@@ -123,11 +122,10 @@ watch(
 )
 
 onMounted(async () => {
-  await Promise.allSettled([loadCategories(), loadMine()])
+  await Promise.allSettled([loadCategories(), loadMine(), loadMyBalances()])
 })
 
-const email = computed(() => auth.user.value?.email || '')
-const currentBal = computed(() => balanceForCategory(allTransactions.value, email.value, form.categoria))
+const currentBal = computed(() => categoryBalance(form.categoria))
 const after = computed(() => currentBal.value - (form.valor || 0))
 
 const submitDisabled = computed(() => {

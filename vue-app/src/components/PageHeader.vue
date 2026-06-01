@@ -21,6 +21,9 @@ defineProps({
 </script>
 
 <style scoped>
+.page-header {
+  width: 100%;
+}
 .page-header__eyebrow {
   font-size: 0.7rem;
   font-weight: 700;

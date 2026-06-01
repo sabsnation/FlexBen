@@ -6,7 +6,7 @@
       eyebrow="Gestão"
     >
       <template #actions>
-        <button class="btn btn-secondary" type="button" @click="refresh">
+        <button class="btn btn-secondary" type="button" @click="refresh(true)">
           <Icon name="refresh" :size="14" /> Atualizar
         </button>
       </template>
@@ -362,8 +362,10 @@ const loadSlaSummary = async () => {
   }
 }
 
-const refresh = () =>
-  Promise.allSettled([loadApprovals(), loadSlaSummary(), loadCeilingApprovals()])
+const refresh = async (fromButton = false) => {
+  await Promise.allSettled([loadApprovals(), loadSlaSummary(), loadCeilingApprovals()])
+  if (fromButton) showToast('Fila de aprovações atualizada.')
+}
 
 const openDecision = (item, decision) => {
   modal.kind = 'usage'

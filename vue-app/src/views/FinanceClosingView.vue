@@ -36,8 +36,9 @@
             </select>
           </div>
           <div style="align-self: flex-end;">
-            <button class="btn btn-ghost" type="button" @click="load">
-              <Icon name="refresh" :size="14" /> Atualizar
+            <button class="btn btn-ghost" type="button" :disabled="refreshing" @click="load(true)">
+              <Icon :name="refreshing ? 'spinner' : 'refresh'" :size="14" :class="refreshing ? 'spin' : ''" />
+              Atualizar
             </button>
           </div>
         </div>
@@ -188,6 +189,7 @@
 import { onMounted, ref, computed } from 'vue'
 import { api } from '../api'
 import { useToast } from '../toast'
+import { useConfirm } from '../confirm'
 import { useAuth } from '../auth'
 import PageHeader from '../components/PageHeader.vue'
 import KpiCard from '../components/KpiCard.vue'
@@ -222,6 +224,8 @@ const monthOptions = [
 ]
 const yearOptions = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1]
 const { showToast } = useToast()
+const refreshing = ref(false)
+const { confirm: askConfirm } = useConfirm()
 const auth = useAuth()
 
 const totalLines = computed(() => lines.value.reduce((sum, l) => sum + l.total, 0))
@@ -232,7 +236,8 @@ const usageBadge = (pct) => {
   return 'badge-success'
 }
 
-const load = async () => {
+const load = async (fromButton = false) => {
+  if (fromButton) refreshing.value = true
   try {
     const q = `month=${period.value.month}&year=${period.value.year}`
     const [closingData, executiveData] = await Promise.all([
@@ -242,8 +247,11 @@ const load = async () => {
     summary.value = closingData.summary
     lines.value = closingData.lines
     executive.value = executiveData
+    if (fromButton) showToast('Dados de fechamento atualizados.')
   } catch (err) {
     showToast(err.message, 'error')
+  } finally {
+    refreshing.value = false
   }
 }
 
@@ -271,7 +279,14 @@ const confirmClose = async () => {
     showToast('Seu perfil não possui permissão para executar o fechamento.', 'error')
     return
   }
-  if (!confirm('Confirmar execução do fechamento mensal? Esta ação liquidará todos os movimentos aprovados.')) return
+  const ok = await askConfirm({
+    title: 'Executar fechamento mensal',
+    message: 'Confirmar a liquidação de todos os movimentos aprovados do período?',
+    detail: 'Esta operação é contábil e afeta o fechamento do mês de referência.',
+    confirmLabel: 'Executar fechamento',
+    variant: 'warning'
+  })
+  if (!ok) return
   running.value = true
   try {
     const out = await api.post('/finance/closing/run', {})

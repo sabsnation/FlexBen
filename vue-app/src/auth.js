@@ -73,6 +73,17 @@ export const useAuth = () => {
     return authRepository.recoverPassword(email)
   }
 
+  const updateProfile = async (payload) => {
+    const { user } = await authRepository.updateProfile(payload)
+    state.user = user
+    localStorage.setItem('user', JSON.stringify(user))
+    return user
+  }
+
+  const changePassword = async (currentPassword, newPassword) => {
+    return authRepository.changePassword(currentPassword, newPassword)
+  }
+
   return {
     user: computed(() => state.user),
     role,
@@ -91,6 +102,8 @@ export const useAuth = () => {
     recoverPassword,
     login,
     logout,
-    register
+    register,
+    updateProfile,
+    changePassword
   }
 }

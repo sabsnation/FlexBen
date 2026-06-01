@@ -6,7 +6,7 @@
       eyebrow="Financeiro"
     >
       <template #actions>
-        <button class="btn btn-ghost" type="button" @click="refresh">
+        <button class="btn btn-ghost" type="button" @click="refresh(true)">
           <Icon name="refresh" :size="14" /> Atualizar
         </button>
       </template>
@@ -196,8 +196,9 @@ const syncCategoryName = () => {
   form.categoryName = cat?.nome || ''
 }
 
-const refresh = async () => {
+const refresh = async (fromButton = false) => {
   await Promise.allSettled([loadCategories(), loadProposals()])
+  if (fromButton) showToast('Lista de propostas atualizada.')
 }
 
 onMounted(refresh)

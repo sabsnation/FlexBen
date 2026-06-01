@@ -2,10 +2,14 @@
   <div class="container">
     <PageHeader
       title="Carga mensal de créditos"
-      subtitle="Credite cada colaborador ativo com o valor configurado em cada categoria do programa flex."
+      subtitle="Credite cada colaborador ativo com o valor efetivo por categoria (respeitando políticas e tetos)."
       eyebrow="Operação RH"
     >
       <template #actions>
+        <button class="btn btn-secondary" type="button" :disabled="previewLoading" @click="loadPreview()">
+          <Icon :name="previewLoading ? 'spinner' : 'refresh'" :size="14" :class="previewLoading ? 'spin' : ''" />
+          Atualizar
+        </button>
         <button
           class="btn btn-primary"
           type="button"
@@ -20,10 +24,11 @@
       </template>
     </PageHeader>
 
-    <div class="grid cols-3 mb-3">
-      <KpiCard label="Colaboradores ativos" :value="activeCollaboratorsCount" tone="info" icon="users" hint="Recebem créditos na carga." />
-      <KpiCard label="Categorias ativas" :value="activeCategoriesCount" tone="success" icon="layers" hint="Uma entrada por categoria." />
-      <KpiCard label="Lançamentos previstos" :value="creditsPreviewCount" tone="warning" icon="activity" hint="Total de transações de Entrada." />
+    <div class="grid cols-4 mb-3">
+      <KpiCard label="Colaboradores ativos" :value="preview?.collaborators ?? 0" tone="info" icon="users" />
+      <KpiCard label="Categorias ativas" :value="preview?.categories ?? 0" tone="success" icon="layers" />
+      <KpiCard label="Lançamentos previstos" :value="preview?.entriesCount ?? 0" tone="warning" icon="activity" />
+      <KpiCard label="Valor total previsto" :value="preview?.totalAmount ?? 0" format="currency" tone="info" icon="dollar-sign" />
     </div>
 
     <div v-if="!canRun" class="notice warning">
@@ -51,9 +56,19 @@
           <span class="icon-bg sm"><Icon name="bar-chart" :size="14" /></span>
           Resumo por categoria
         </span>
-        <span class="muted text-xs">{{ activeCategoriesCount }} categoria(s) · {{ activeCollaboratorsCount }} colaborador(es)</span>
+        <span class="muted text-xs">
+          {{ preview?.categories ?? 0 }} categoria(s) · {{ preview?.collaborators ?? 0 }} colaborador(es)
+        </span>
       </h3>
-      <EmptyState v-if="!categoryRows.length" icon="layers" title="Nenhuma categoria ativa" message="Habilite categorias em Categorias & Limites." />
+      <EmptyState
+        v-if="!categoryRows.length && !previewLoading"
+        icon="layers"
+        title="Nenhuma categoria ativa"
+        message="Habilite categorias em Categorias & Limites."
+      />
+      <div v-else-if="previewLoading" class="muted text-center" style="padding: 2rem;">
+        <Icon name="spinner" :size="16" class="spin" /> Calculando preview…
+      </div>
       <div v-else class="table-wrapper" style="border: none; box-shadow: none;">
         <table>
           <thead>
@@ -67,15 +82,15 @@
           <tbody>
             <tr v-for="row in categoryRows" :key="row.nome">
               <td><strong>{{ row.nome }}</strong></td>
-              <td>{{ formatCurrency(row.limite) }}</td>
-              <td>{{ activeCollaboratorsCount }}</td>
-              <td><strong>{{ formatCurrency(row.totalEstimado) }}</strong></td>
+              <td>{{ formatCurrency(row.perCollaborator) }}</td>
+              <td>{{ row.collaborators }}</td>
+              <td><strong>{{ formatCurrency(row.categoryTotal) }}</strong></td>
             </tr>
             <tr class="total-row">
-              <td><strong>Total</strong></td>
+              <td><strong>Total geral</strong></td>
               <td>—</td>
-              <td>{{ activeCollaboratorsCount }}</td>
-              <td><strong>{{ formatCurrency(totalAll) }}</strong></td>
+              <td>{{ preview?.entriesCount ?? 0 }} lanç.</td>
+              <td><strong>{{ formatCurrency(preview?.totalAmount ?? 0) }}</strong></td>
             </tr>
           </tbody>
         </table>
@@ -86,9 +101,10 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { api } from '../api'
 import { useToast } from '../toast'
+import { useConfirm } from '../confirm'
 import { useAuth } from '../auth'
-import { useCategories } from '../categories'
 import { useTransactions } from '../transactions'
 import PageHeader from '../components/PageHeader.vue'
 import KpiCard from '../components/KpiCard.vue'
@@ -96,38 +112,33 @@ import EmptyState from '../components/EmptyState.vue'
 import Icon from '../components/Icon.vue'
 
 const { showToast } = useToast()
+const { confirm } = useConfirm()
 const auth = useAuth()
-const { allRegisteredUsers, loadUsers } = auth
-const { categories, loadCategories } = useCategories()
 const { applyMonthlyCategoryCredits } = useTransactions()
 
 const loading = ref(false)
+const previewLoading = ref(false)
+const preview = ref(null)
 
-onMounted(async () => {
-  await Promise.allSettled([loadUsers(), loadCategories()])
-})
+const loadPreview = async (quiet = false) => {
+  previewLoading.value = true
+  try {
+    preview.value = await api.get('/admin/monthly-load/preview')
+    if (!quiet) showToast('Preview da carga atualizado.')
+  } catch (e) {
+    showToast(e.message || 'Falha ao carregar preview.', 'error')
+  } finally {
+    previewLoading.value = false
+  }
+}
 
-const activeCollaborators = computed(() =>
-  allRegisteredUsers.value.filter((u) => u.role === 'colaborador' && u.status === 'Ativo')
+onMounted(() => loadPreview(true))
+
+const categoryRows = computed(() => preview.value?.categoryRows || [])
+
+const canRun = computed(
+  () => (preview.value?.collaborators || 0) > 0 && (preview.value?.categories || 0) > 0
 )
-const activeCollaboratorsCount = computed(() => activeCollaborators.value.length)
-
-const activeCategories = computed(() => categories.value.filter((c) => c.status !== 'Inativa'))
-const activeCategoriesCount = computed(() => activeCategories.value.length)
-
-const creditsPreviewCount = computed(() => activeCollaboratorsCount.value * activeCategoriesCount.value)
-
-const canRun = computed(() => activeCollaboratorsCount.value > 0 && activeCategoriesCount.value > 0)
-
-const categoryRows = computed(() => {
-  const n = activeCollaboratorsCount.value
-  return activeCategories.value.map((c) => {
-    const limite = Number(c.limite)
-    return { nome: c.nome, limite, totalEstimado: limite * n }
-  })
-})
-
-const totalAll = computed(() => categoryRows.value.reduce((s, r) => s + r.totalEstimado, 0))
 
 const formatCurrency = (v) =>
   Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -141,20 +152,26 @@ const handleCarga = async () => {
     showToast('Seu perfil não possui permissão para executar a carga.', 'error')
     return
   }
-  const msg = `Gerar créditos para ${activeCollaboratorsCount.value} colaborador(es) em ${activeCategoriesCount.value} categoria(s) (${creditsPreviewCount.value} lançamentos)?`
-  if (!confirm(msg)) return
+  const ok = await confirm({
+    title: 'Executar carga mensal',
+    message: `Gerar créditos para ${preview.value.collaborators} colaborador(es) em ${preview.value.categories} categoria(s)?`,
+    detail: `Total previsto: ${formatCurrency(preview.value.totalAmount)} (${preview.value.entriesCount} lançamentos).`,
+    confirmLabel: 'Executar carga',
+    variant: 'warning'
+  })
+  if (!ok) return
 
   loading.value = true
   try {
     const created = await applyMonthlyCategoryCredits()
     showToast(`Carga concluída: ${created} crédito(s) registrado(s).`)
+    await loadPreview()
   } catch (e) {
     showToast(e.message || 'Falha ao processar a carga.', 'error')
   } finally {
     loading.value = false
   }
 }
-
 </script>
 
 <style scoped>

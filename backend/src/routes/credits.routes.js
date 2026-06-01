@@ -15,6 +15,27 @@ export function registerCreditRoutes(app, {
   FINANCE_OPS_ROLES
 }) {
   app.get(
+    '/api/me/balances',
+    authRequired,
+    asyncHandler(async (req, res) => {
+      const categories = await prisma.category.findMany({
+        where: { status: { not: 'Inativa' } },
+        orderBy: { nome: 'asc' }
+      })
+      const balances = []
+      for (const c of categories) {
+        const saldo = await balanceInCategory(req.auth.id, c.nome)
+        balances.push({
+          categoria: c.nome,
+          limite: Number(c.limite),
+          saldo
+        })
+      }
+      res.json({ balances })
+    })
+  )
+
+  app.get(
     '/api/credits/eligible-users',
     authRequired,
     roleRequired(FINANCE_OPS_ROLES),

@@ -149,6 +149,7 @@ import { reactive, computed, onMounted } from 'vue'
 import { useTransactions } from '../transactions'
 import { useCategories } from '../categories'
 import { useToast } from '../toast'
+import { useConfirm } from '../confirm'
 import PageHeader from '../components/PageHeader.vue'
 import KpiCard from '../components/KpiCard.vue'
 import StatusBadge from '../components/StatusBadge.vue'
@@ -157,6 +158,7 @@ import Icon from '../components/Icon.vue'
 
 const { transactions, deleteTransaction, loadMine, getWorkflowHistory } = useTransactions()
 const { showToast } = useToast()
+const { confirm } = useConfirm()
 const { categories, loadCategories } = useCategories()
 
 onMounted(async () => {
@@ -237,7 +239,14 @@ const openWorkflow = async (id) => {
 }
 
 const handleDelete = async (id) => {
-  if (!confirm('Deseja excluir permanentemente este registro?')) return
+  const ok = await confirm({
+    title: 'Excluir transação',
+    message: 'Deseja remover permanentemente este registro?',
+    detail: 'O histórico será alterado e a ação ficará na auditoria.',
+    confirmLabel: 'Excluir',
+    variant: 'danger'
+  })
+  if (!ok) return
   try {
     await deleteTransaction(id)
     showToast('Transação removida com sucesso.', 'success')

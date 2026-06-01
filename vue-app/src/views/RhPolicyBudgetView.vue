@@ -6,8 +6,9 @@
       eyebrow="RH / Admin"
     >
       <template #actions>
-        <button class="btn btn-secondary" type="button" @click="load">
-          <Icon name="refresh" :size="14" /> Atualizar
+        <button class="btn btn-secondary" type="button" :disabled="refreshing" @click="load(true)">
+          <Icon :name="refreshing ? 'spinner' : 'refresh'" :size="14" :class="refreshing ? 'spin' : ''" />
+          Atualizar
         </button>
       </template>
       <template #meta>
@@ -271,6 +272,7 @@ const monthOptions = [
 ]
 const yearOptions = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1]
 const { showToast } = useToast()
+const refreshing = ref(false)
 
 const usageBadge = (pct) => {
   if (pct > 100) return 'badge-danger'
@@ -278,7 +280,8 @@ const usageBadge = (pct) => {
   return 'badge-success'
 }
 
-const load = async () => {
+const load = async (fromButton = false) => {
+  if (fromButton) refreshing.value = true
   try {
     const q = `month=${period.value.month}&year=${period.value.year}`
     const [policyData, executiveData] = await Promise.all([
@@ -288,8 +291,11 @@ const load = async () => {
     summary.value = policyData.summary
     policies.value = policyData.policies
     executive.value = executiveData
+    if (fromButton) showToast('Painel atualizado.')
   } catch (err) {
     showToast(err.message, 'error')
+  } finally {
+    refreshing.value = false
   }
 }
 

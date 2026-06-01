@@ -3,7 +3,8 @@ import { useAuth } from './auth'
 import { transactionRepository } from './repositories/TransactionApiRepository.js'
 
 const state = reactive({
-  items: []
+  items: [],
+  balancesByCategory: {}
 })
 
 export const useTransactions = () => {
@@ -15,6 +16,29 @@ export const useTransactions = () => {
     return transactions
   }
 
+  const loadMyBalances = async () => {
+    const balances = await transactionRepository.getMyBalances()
+    const map = {}
+    for (const row of balances) {
+      map[row.categoria] = {
+        saldo: Number(row.saldo) || 0,
+        limite: Number(row.limite) || 0
+      }
+    }
+    state.balancesByCategory = map
+    return balances
+  }
+
+  const categoryBalance = (categoria) => {
+    const key = String(categoria || '').trim()
+    return state.balancesByCategory[key]?.saldo ?? 0
+  }
+
+  const categoryLimit = (categoria) => {
+    const key = String(categoria || '').trim()
+    return state.balancesByCategory[key]?.limite ?? 0
+  }
+
   const myTransactions = computed(() => {
     const email = auth.user.value?.email?.toLowerCase()
     if (!email) return []
@@ -23,12 +47,12 @@ export const useTransactions = () => {
 
   const createReallocation = async (payload) => {
     await transactionRepository.createReallocation(payload)
-    await loadMine()
+    await Promise.all([loadMine(), loadMyBalances()])
   }
 
   const registerUsage = async (payload) => {
     await transactionRepository.registerUsage(payload)
-    await loadMine()
+    await Promise.all([loadMine(), loadMyBalances()])
   }
 
   const deleteTransaction = async (id) => {
@@ -53,7 +77,11 @@ export const useTransactions = () => {
   return {
     transactions: myTransactions,
     allTransactions: computed(() => state.items),
+    balancesByCategory: computed(() => state.balancesByCategory),
     loadMine,
+    loadMyBalances,
+    categoryBalance,
+    categoryLimit,
     createReallocation,
     registerUsage,
     deleteTransaction,

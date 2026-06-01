@@ -103,9 +103,12 @@
           </button>
         </form>
 
-        <div class="form-footer">
-          <span>Ainda não tem conta?</span>
-          <RouterLink class="link" to="/cadastro">Criar conta</RouterLink>
+        <div class="form-footer contact-hint">
+          <Icon name="info" :size="14" />
+          <span>
+            Não tem cadastro?
+            <strong>Entre em contato com o RH ou administrador</strong> da sua empresa para solicitar acesso.
+          </span>
         </div>
 
         <div class="demo-card">
@@ -372,14 +375,23 @@ function landingForRole(role) {
 }
 .input-toggle:hover { color: var(--text-strong); }
 
-.form-footer {
-  text-align: center;
-  font-size: 0.88rem;
+.form-footer.contact-hint {
+  text-align: left;
+  font-size: 0.82rem;
   color: var(--text-muted);
   margin-bottom: 1.5rem;
   display: flex;
-  justify-content: center;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0.75rem 0.85rem;
+  background: var(--surface-soft);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  line-height: 1.45;
+}
+.form-footer.contact-hint strong {
+  color: var(--text-strong);
+  font-weight: 600;
 }
 
 .demo-card {

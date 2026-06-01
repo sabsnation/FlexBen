@@ -3,19 +3,24 @@
  */
 
 export function balanceForCategory(transactions, userEmail, categoria) {
-  const email = userEmail.toLowerCase()
+  const email = String(userEmail || '').toLowerCase()
+  const cat = String(categoria || '').trim()
   const credit = transactions
     .filter(
       (t) =>
-        t.userEmail === email && t.tipo === 'Entrada' && t.categoria === categoria
+        String(t.userEmail || '').toLowerCase() === email &&
+        t.tipo === 'Entrada' &&
+        t.categoria === cat
     )
-    .reduce((acc, t) => acc + t.valor, 0)
+    .reduce((acc, t) => acc + Number(t.valor || 0), 0)
   const debit = transactions
     .filter(
       (t) =>
-        t.userEmail === email && t.tipo === 'Saída' && t.categoria === categoria
+        String(t.userEmail || '').toLowerCase() === email &&
+        t.tipo === 'Saída' &&
+        t.categoria === cat
     )
-    .reduce((acc, t) => acc + t.valor, 0)
+    .reduce((acc, t) => acc + Number(t.valor || 0), 0)
   return credit - debit
 }
 

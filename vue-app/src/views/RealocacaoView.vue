@@ -63,6 +63,31 @@
         <div class="card">
           <h3 class="card-title">
             <span class="title-with-icon">
+              <span class="icon-bg sm success"><Icon name="dollar-sign" :size="14" /></span>
+              Saldos por categoria
+            </span>
+            <button type="button" class="btn btn-ghost btn-sm" :disabled="balancesLoading" @click="reloadBalances">
+              <Icon :name="balancesLoading ? 'spinner' : 'refresh'" :size="12" :class="balancesLoading ? 'spin' : ''" />
+            </button>
+          </h3>
+          <p v-if="balancesLoading" class="muted text-sm">Carregando saldos…</p>
+          <EmptyState
+            v-else-if="!balanceRows.length"
+            icon="layers"
+            title="Sem créditos alocados"
+            message="Peça ao RH/Financeiro para alocar créditos em Alocar créditos antes de realocar."
+          />
+          <ul v-else class="balance-mini-list">
+            <li v-for="row in balanceRows" :key="row.categoria">
+              <span>{{ row.categoria }}</span>
+              <strong>{{ formatCurrency(row.saldo) }}</strong>
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">
+            <span class="title-with-icon">
               <span class="icon-bg sm info"><Icon name="eye" :size="14" /></span>
               Pré-visualização
             </span>
@@ -113,20 +138,41 @@ import { useTransactions } from '../transactions'
 import { useCategories } from '../categories'
 import { useAuth } from '../auth'
 import { useToast } from '../toast'
-import { balanceForCategory } from '../services/transactionService'
 import PageHeader from '../components/PageHeader.vue'
+import EmptyState from '../components/EmptyState.vue'
 import Icon from '../components/Icon.vue'
 
 const router = useRouter()
-const { createReallocation, allTransactions, loadMine } = useTransactions()
+const {
+  createReallocation,
+  loadMine,
+  loadMyBalances,
+  categoryBalance,
+  categoryLimit,
+  balancesByCategory
+} = useTransactions()
 const { categories, loadCategories } = useCategories()
 const auth = useAuth()
 const { showToast } = useToast()
 
 const loading = ref(false)
+const balancesLoading = ref(false)
+
+const reloadBalances = async () => {
+  balancesLoading.value = true
+  try {
+    await loadMyBalances()
+  } catch (e) {
+    showToast(e.message || 'Falha ao carregar saldos.', 'error')
+  } finally {
+    balancesLoading.value = false
+  }
+}
 
 onMounted(async () => {
-  await Promise.allSettled([loadMine(), loadCategories()])
+  balancesLoading.value = true
+  await Promise.allSettled([loadMine(), loadCategories(), loadMyBalances()])
+  balancesLoading.value = false
 })
 
 const form = reactive({ fromCategory: '', toCategory: '', valor: null, descricao: '' })
@@ -146,13 +192,22 @@ watch(
   { immediate: true }
 )
 
-const email = computed(() => auth.user.value?.email || '')
+const balanceRows = computed(() =>
+  Object.entries(balancesByCategory.value)
+    .map(([categoria, row]) => ({ categoria, saldo: row.saldo, limite: row.limite }))
+    .filter((r) => r.saldo > 0 || r.limite > 0)
+    .sort((a, b) => b.saldo - a.saldo)
+)
 
-const balFrom = computed(() => balanceForCategory(allTransactions.value, email.value, form.fromCategory))
-const balTo = computed(() => balanceForCategory(allTransactions.value, email.value, form.toCategory))
+const balFrom = computed(() => categoryBalance(form.fromCategory))
+const balTo = computed(() => categoryBalance(form.toCategory))
 
 const destCat = computed(() => activeCategories.value.find((c) => c.nome === form.toCategory))
-const destTeto = computed(() => Number(destCat.value?.limite || 0))
+const destTeto = computed(() => {
+  const fromApi = categoryLimit(form.toCategory)
+  if (fromApi > 0) return fromApi
+  return Number(destCat.value?.limite || 0)
+})
 const destAfter = computed(() => balTo.value + (form.valor || 0))
 
 const warningMessage = computed(() => {
@@ -200,6 +255,7 @@ const submit = async () => {
     showToast('Realocação registrada com sucesso.')
     form.valor = null
     form.descricao = ''
+    await reloadBalances()
     router.push('/transacoes')
   } catch (e) {
     showToast(e.message || 'Erro ao realocar.', 'error')
@@ -235,5 +291,22 @@ const submit = async () => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.balance-mini-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.balance-mini-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.45rem 0.6rem;
+  background: var(--surface-soft);
+  border-radius: var(--radius-xs);
+  font-size: 0.85rem;
 }
 </style>

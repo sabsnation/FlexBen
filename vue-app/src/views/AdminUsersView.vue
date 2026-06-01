@@ -139,6 +139,7 @@
 import { reactive, computed, onMounted } from 'vue'
 import { useUsers } from '../users'
 import { useToast } from '../toast'
+import { useConfirm } from '../confirm'
 import PageHeader from '../components/PageHeader.vue'
 import KpiCard from '../components/KpiCard.vue'
 import StatusBadge from '../components/StatusBadge.vue'
@@ -148,6 +149,7 @@ import Icon from '../components/Icon.vue'
 
 const { users, loadUsers, toggleStatus, deleteUser, inviteUser } = useUsers()
 const { showToast } = useToast()
+const { confirm } = useConfirm()
 
 onMounted(async () => {
   await loadUsers()
@@ -254,7 +256,15 @@ const handleToggleStatus = async (id) => {
 }
 
 const handleDelete = async (id, nome) => {
-  if (!confirm(`Excluir ${nome}? A ação é irreversível.`)) return
+  const ok = await confirm({
+    title: 'Excluir usuário',
+    message: `Remover ${nome} do sistema?`,
+    detail: 'Esta ação é irreversível e não pode ser desfeita.',
+    confirmLabel: 'Excluir',
+    cancelLabel: 'Manter',
+    variant: 'danger'
+  })
+  if (!ok) return
   try {
     await deleteUser(id)
     showToast('Usuário removido.', 'success')

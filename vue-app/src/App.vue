@@ -74,22 +74,38 @@
         </div>
 
         <div class="topbar-right">
-          <button class="topbar-btn" type="button" aria-label="Notificações">
-            <Icon name="bell" :size="16" />
+          <button
+            type="button"
+            class="icon-btn"
+            aria-label="Notificações"
+            :aria-expanded="notificationsOpen"
+            @click="toggleNotifications"
+          >
+            <Icon name="bell" :size="18" />
+            <span v-if="unreadCount" class="notif-badge">{{ unreadCount > 9 ? '9+' : unreadCount }}</span>
           </button>
-          <div class="user-profile">
-            <div class="avatar" :style="{ background: roleColor }">{{ initials }}</div>
+
+          <button type="button" class="user-profile user-profile--btn" @click="profileOpen = true">
+            <div class="avatar" :style="topAvatarStyle">
+              <img v-if="user?.avatarData" :src="user.avatarData" alt="" class="avatar-img" />
+              <span v-else>{{ initials }}</span>
+            </div>
             <div class="user-profile__info hide-mobile">
               <span class="user-profile__name">{{ user?.nome }}</span>
               <span class="user-profile__role">{{ roleLabel }}</span>
             </div>
-          </div>
+          </button>
         </div>
       </header>
 
       <router-view />
     </main>
   </div>
+
+  <NotificationPanel :open="notificationsOpen" @close="notificationsOpen = false" />
+  <ProfilePanel :open="profileOpen" @close="profileOpen = false" />
+
+  <ConfirmDialog />
 
   <Transition name="toast">
     <div v-if="toast.visible" class="toast-overlay" :class="toast.type">
@@ -107,20 +123,36 @@
 <script setup>
 import { useAuth } from './auth'
 import { useToast } from './toast'
+import { useConfirm } from './confirm'
+import ConfirmDialog from './components/ConfirmDialog.vue'
 import { useRouter, useRoute } from 'vue-router'
 import { computed, onMounted, ref, watch } from 'vue'
 import { getToken } from './api'
 import { NAV_SECTIONS } from './config/navigation'
 import { useBreakpoint } from './composables/useBreakpoint.js'
 import Icon from './components/Icon.vue'
+import NotificationPanel from './components/NotificationPanel.vue'
+import ProfilePanel from './components/ProfilePanel.vue'
+import { useNotifications } from './notifications.js'
 
 const { user, role, isAuthenticated, logout, refreshMe, can } = useAuth()
+const { unreadCount, load: loadNotifications } = useNotifications()
 const { isMobileLayout } = useBreakpoint()
 const { toast } = useToast()
+const { confirm } = useConfirm()
 const router = useRouter()
 const route = useRoute()
 
 const sidebarOpen = ref(false)
+const notificationsOpen = ref(false)
+const profileOpen = ref(false)
+
+const toggleNotifications = async () => {
+  notificationsOpen.value = !notificationsOpen.value
+  if (notificationsOpen.value) {
+    await loadNotifications()
+  }
+}
 const toggleSidebar = () => {
   sidebarOpen.value = !sidebarOpen.value
 }
@@ -141,6 +173,7 @@ onMounted(async () => {
   if (getToken()) {
     try {
       await refreshMe()
+      await loadNotifications()
     } catch {
       logout()
       router.push('/login')
@@ -148,11 +181,17 @@ onMounted(async () => {
   }
 })
 
-const handleLogout = () => {
-  if (confirm('Deseja realmente sair?')) {
-    logout()
-    router.push('/login')
-  }
+const handleLogout = async () => {
+  const ok = await confirm({
+    title: 'Sair da conta',
+    message: 'Deseja encerrar sua sessão no FlexBen?',
+    confirmLabel: 'Sair',
+    cancelLabel: 'Continuar',
+    variant: 'warning'
+  })
+  if (!ok) return
+  logout()
+  router.push('/login')
 }
 
 const visibleSections = computed(() =>
@@ -202,6 +241,11 @@ const initials = computed(() => {
   if (!u) return '?'
   if (u.initials) return u.initials
   return (u.nome || u.email || '?').slice(0, 1).toUpperCase()
+})
+
+const topAvatarStyle = computed(() => {
+  if (user.value?.avatarData) return {}
+  return { background: roleColor.value }
 })
 </script>
 
@@ -319,6 +363,61 @@ const initials = computed(() => {
   border-color: var(--border-strong);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
+}
+
+.icon-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: var(--shadow-sm);
+}
+.icon-btn:hover {
+  color: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+.notif-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--brand-danger);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--surface);
+}
+.user-profile--btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  transition: var(--transition);
+}
+.user-profile--btn:hover {
+  opacity: 0.92;
+}
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
 }
 
 .user-profile__info {

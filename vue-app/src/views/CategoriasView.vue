@@ -88,6 +88,7 @@
 import { reactive, computed, onMounted } from 'vue'
 import { useCategories } from '../categories'
 import { useToast } from '../toast'
+import { useConfirm } from '../confirm'
 import { assertCategoryForm } from '../services/formValidators'
 import PageHeader from '../components/PageHeader.vue'
 import KpiCard from '../components/KpiCard.vue'
@@ -101,6 +102,7 @@ const formatCurrency = (v) =>
 
 const { categories, addCategory, deleteCategory, loadCategories } = useCategories()
 const { showToast } = useToast()
+const { confirm } = useConfirm()
 
 onMounted(async () => {
   await loadCategories()
@@ -152,7 +154,14 @@ const handleSave = async () => {
 }
 
 const handleDelete = async (id, nome) => {
-  if (!confirm(`Excluir a categoria "${nome}"?`)) return
+  const ok = await confirm({
+    title: 'Excluir categoria',
+    message: `Remover a categoria "${nome}"?`,
+    detail: 'Colaboradores deixarão de ver este bolso de crédito.',
+    confirmLabel: 'Excluir',
+    variant: 'danger'
+  })
+  if (!ok) return
   try {
     await deleteCategory(id)
     showToast('Categoria removida.', 'success')

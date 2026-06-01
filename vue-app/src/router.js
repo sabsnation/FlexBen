@@ -22,7 +22,12 @@ import BenefitCeilingsView from './views/BenefitCeilingsView.vue'
 const routes = [
   { path: '/', redirect: '/login' },
   { path: '/login', name: 'Login', component: LoginView },
-  { path: '/cadastro', name: 'Cadastro', component: CadastroView },
+  {
+    path: '/cadastro',
+    name: 'Cadastro',
+    component: CadastroView,
+    meta: { requiresAuth: true, allowedRoles: ['administrador'] }
+  },
   {
     path: '/dashboard',
     name: 'Dashboard',

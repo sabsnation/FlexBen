@@ -23,6 +23,7 @@ import {
 } from './lib/ceilingProposals.js'
 import { authRequired, adminRequired, roleRequired } from './middleware/auth.js'
 import { registerCreditRoutes } from './routes/credits.routes.js'
+import { syncNotificationsForUser, serializeNotification } from './lib/notifications.js'
 
 const PORT = Number(process.env.PORT || 3333)
 const JWT_SECRET = process.env.JWT_SECRET || 'flexben-dev-secret'
@@ -60,14 +61,16 @@ function asyncHandler(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next)
 }
 
-function publicUser(user) {
-  return {
+function publicUser(user, options = {}) {
+  const { includeAvatar = false } = options
+  const base = {
     id: user.id,
     nome: user.nome,
     email: user.email,
     role: user.role,
     status: user.status,
     dataCadastro: user.dataCadastro,
+    hasAvatar: Boolean(user.avatarData),
     initials: user.nome
       .split(' ')
       .map((n) => n[0])
@@ -75,12 +78,73 @@ function publicUser(user) {
       .toUpperCase()
       .slice(0, 2)
   }
+  if (includeAvatar && user.avatarData) {
+    base.avatarData = user.avatarData
+  }
+  return base
+}
+
+async function creditAmountForUserCategory(user, category) {
+  const policy = await resolvePolicyRule({
+    role: user.role,
+    category: category.nome,
+    costCenter: '*'
+  })
+  const baseValue = policy
+    ? Math.min(Number(category.limite), Number(policy.monthlyCap))
+    : Number(category.limite)
+  return parseMoney(baseValue) || 0
+}
+
+async function buildMonthlyLoadPreview() {
+  const collaborators = await prisma.user.findMany({
+    where: { role: 'colaborador', status: 'Ativo' }
+  })
+  const categories = await prisma.category.findMany({
+    where: { status: { not: 'Inativa' } }
+  })
+
+  let entriesCount = 0
+  let totalAmount = 0
+  const categoryRows = []
+
+  for (const c of categories) {
+    let categoryTotal = 0
+    let perCollaborator = 0
+    let creditedUsers = 0
+
+    for (const u of collaborators) {
+      const v = await creditAmountForUserCategory(u, c)
+      if (v <= 0) continue
+      if (!perCollaborator) perCollaborator = v
+      categoryTotal += v
+      creditedUsers += 1
+      entriesCount += 1
+      totalAmount += v
+    }
+
+    categoryRows.push({
+      nome: c.nome,
+      limite: Number(c.limite),
+      perCollaborator,
+      collaborators: creditedUsers,
+      categoryTotal
+    })
+  }
+
+  return {
+    collaborators: collaborators.length,
+    categories: categories.length,
+    entriesCount,
+    totalAmount,
+    categoryRows
+  }
 }
 
 function serializeTransaction(row) {
   return {
     id: row.id,
-    userEmail: row.user.email,
+    userEmail: String(row.user.email || '').toLowerCase(),
     data: row.data,
     tipo: row.tipo,
     categoria: row.categoria,
@@ -287,36 +351,11 @@ app.post(
 
 app.post(
   '/api/auth/register',
-  asyncHandler(async (req, res) => {
-    const nome = String(req.body?.nome || '').trim()
-    const email = String(req.body?.email || '').trim().toLowerCase()
-    const senha = String(req.body?.senha || '')
-    if (nome.length < 2) return res.status(400).json({ message: 'Nome inválido.' })
-    if (!email.includes('@')) return res.status(400).json({ message: 'E-mail inválido.' })
-    if (senha.length < 6) {
-      return res.status(400).json({ message: 'Senha deve ter ao menos 6 caracteres.' })
-    }
-    const exists = await prisma.user.findUnique({ where: { email } })
-    if (exists) return res.status(409).json({ message: 'Este e-mail já está cadastrado.' })
-    const passwordHash = await bcrypt.hash(senha, 10)
-    const user = await prisma.user.create({
-      data: {
-        nome,
-        email,
-        passwordHash,
-        role: 'colaborador',
-        status: 'Ativo',
-        dataCadastro: new Date().toLocaleDateString('pt-BR')
-      }
+  asyncHandler(async (_req, res) => {
+    res.status(403).json({
+      message:
+        'Cadastro público desativado. Solicite acesso ao RH ou administrador da empresa.'
     })
-    await logBusinessEvent({
-      action: 'USER_REGISTER',
-      actorEmail: user.email,
-      module: 'auth',
-      entityId: user.id,
-      payload: { userId: user.id }
-    })
-    res.status(201).json({ user: publicUser(user) })
   })
 )
 
@@ -326,7 +365,103 @@ app.get(
   asyncHandler(async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: req.auth.id } })
     if (!user) return res.status(404).json({ message: 'Usuário não encontrado.' })
-    res.json({ user: publicUser(user) })
+    res.json({ user: publicUser(user, { includeAvatar: true }) })
+  })
+)
+
+app.patch(
+  '/api/auth/profile',
+  authRequired,
+  asyncHandler(async (req, res) => {
+    const nome = String(req.body?.nome || '').trim()
+    const avatarData = req.body?.avatarData != null ? String(req.body.avatarData) : undefined
+    const data = {}
+    if (nome.length >= 2) data.nome = nome
+    if (avatarData !== undefined) {
+      if (avatarData && avatarData.length > 600_000) {
+        return res.status(400).json({ message: 'Imagem muito grande. Use até ~400 KB.' })
+      }
+      data.avatarData = avatarData || null
+    }
+    if (!Object.keys(data).length) {
+      return res.status(400).json({ message: 'Nenhum dado para atualizar.' })
+    }
+    const updated = await prisma.user.update({
+      where: { id: req.auth.id },
+      data
+    })
+    res.json({ user: publicUser(updated, { includeAvatar: true }) })
+  })
+)
+
+app.patch(
+  '/api/auth/password',
+  authRequired,
+  asyncHandler(async (req, res) => {
+    const currentPassword = String(req.body?.currentPassword || '')
+    const newPassword = String(req.body?.newPassword || '')
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Informe a senha atual e a nova senha.' })
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'A nova senha deve ter ao menos 6 caracteres.' })
+    }
+    const user = await prisma.user.findUnique({ where: { id: req.auth.id } })
+    if (!user) return res.status(404).json({ message: 'Usuário não encontrado.' })
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash)
+    if (!ok) return res.status(401).json({ message: 'Senha atual incorreta.' })
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash } })
+    res.json({ ok: true, message: 'Senha atualizada com sucesso.' })
+  })
+)
+
+app.get(
+  '/api/notifications',
+  authRequired,
+  asyncHandler(async (req, res) => {
+    const user = await prisma.user.findUnique({ where: { id: req.auth.id } })
+    if (!user) return res.status(404).json({ message: 'Usuário não encontrado.' })
+    await syncNotificationsForUser(user)
+    const rows = await prisma.notification.findMany({
+      where: { userId: user.id },
+      orderBy: { id: 'desc' },
+      take: 50
+    })
+    const unreadCount = rows.filter((n) => !n.read).length
+    res.json({
+      notifications: rows.map(serializeNotification),
+      unreadCount
+    })
+  })
+)
+
+app.patch(
+  '/api/notifications/read-all',
+  authRequired,
+  asyncHandler(async (req, res) => {
+    await prisma.notification.updateMany({
+      where: { userId: req.auth.id, read: false },
+      data: { read: true }
+    })
+    res.json({ ok: true })
+  })
+)
+
+app.patch(
+  '/api/notifications/:id/read',
+  authRequired,
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id)
+    const row = await prisma.notification.findFirst({
+      where: { id, userId: req.auth.id }
+    })
+    if (!row) return res.status(404).json({ message: 'Notificação não encontrada.' })
+    const updated = await prisma.notification.update({
+      where: { id },
+      data: { read: true }
+    })
+    res.json({ notification: serializeNotification(updated) })
   })
 )
 
@@ -773,34 +908,39 @@ app.post(
   })
 )
 
+app.get(
+  '/api/admin/monthly-load/preview',
+  authRequired,
+  adminRequired,
+  asyncHandler(async (_req, res) => {
+    const preview = await buildMonthlyLoadPreview()
+    res.json(preview)
+  })
+)
+
 app.post(
   '/api/admin/monthly-load',
   authRequired,
   adminRequired,
   asyncHandler(async (req, res) => {
+    const preview = await buildMonthlyLoadPreview()
+    if (!preview.collaborators || !preview.categories) {
+      return res.status(400).json({
+        message: 'Não há colaboradores ativos ou categorias ativas para processar.'
+      })
+    }
     const collaborators = await prisma.user.findMany({
       where: { role: 'colaborador', status: 'Ativo' }
     })
     const categories = await prisma.category.findMany({
       where: { status: { not: 'Inativa' } }
     })
-    if (!collaborators.length || !categories.length) {
-      return res.status(400).json({
-        message: 'Não há colaboradores ativos ou categorias ativas para processar.'
-      })
-    }
     const now = new Date().toLocaleDateString('pt-BR')
     const runTag = `[run:${Date.now()}]`
     const rows = []
     for (const u of collaborators) {
       for (const c of categories) {
-        const policy = await resolvePolicyRule({
-          role: u.role,
-          category: c.nome,
-          costCenter: '*'
-        })
-        const baseValue = policy ? Math.min(Number(c.limite), Number(policy.monthlyCap)) : Number(c.limite)
-        const v = parseMoney(baseValue)
+        const v = await creditAmountForUserCategory(u, c)
         if (!v || v <= 0) continue
         rows.push({
           userId: u.id,
@@ -1062,7 +1202,13 @@ app.get(
   authRequired,
   adminRequired,
   asyncHandler(async (_req, res) => {
-    const events = await fetchRecentAudit(100)
+    const rawEvents = await fetchRecentAudit(100)
+    const events = rawEvents.map((ev) => ({
+      ...ev,
+      module: ev.payload?.module || 'geral',
+      outcome: ev.payload?.outcome || null,
+      entityId: ev.payload?.entityId ?? null
+    }))
     res.json({
       events,
       provider: getAuditProvider(),

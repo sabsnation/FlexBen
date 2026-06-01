@@ -149,6 +149,7 @@
 <script setup>
 import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { useToast } from '../toast'
+import { useConfirm } from '../confirm'
 import { useAuth } from '../auth'
 import { useCredits } from '../credits'
 import PageHeader from '../components/PageHeader.vue'
@@ -156,6 +157,7 @@ import EmptyState from '../components/EmptyState.vue'
 import Icon from '../components/Icon.vue'
 
 const { showToast } = useToast()
+const { confirm } = useConfirm()
 const auth = useAuth()
 const {
   eligibleUsers,
@@ -262,8 +264,14 @@ const handleAllocate = async () => {
       valor: Number(r.valor),
       descricao: r.descricao?.trim() || undefined
     }))
-  const msg = `Creditar ${formatCurrency(totalToAllocate.value)} em ${items.length} categoria(s) para ${selectedUser.value?.nome}?`
-  if (!confirm(msg)) return
+  const ok = await confirm({
+    title: 'Confirmar alocação',
+    message: `Creditar ${formatCurrency(totalToAllocate.value)} em ${items.length} categoria(s)?`,
+    detail: `Colaborador: ${selectedUser.value?.nome}`,
+    confirmLabel: 'Confirmar crédito',
+    variant: 'primary'
+  })
+  if (!ok) return
 
   submitting.value = true
   try {
@@ -301,13 +309,18 @@ const handleAllocate = async () => {
 }
 .input-compact {
   width: 100%;
-  min-width: 100px;
-  max-width: 160px;
+  min-width: 0;
+  max-width: 100%;
   padding: 0.45rem 0.6rem;
   font-size: 0.875rem;
 }
-tbody td:last-child .input-compact {
-  max-width: 220px;
+@media (min-width: 768px) {
+  .input-compact {
+    max-width: 160px;
+  }
+  tbody td:last-child .input-compact {
+    max-width: 220px;
+  }
 }
 .skeleton-list {
   display: flex;
