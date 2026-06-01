@@ -50,7 +50,7 @@ const routes = [
     component: UtilizacaoView,
     meta: {
       requiresAuth: true,
-      allowedRoles: ['colaborador', 'gestor', 'administrador', 'financeiro']
+      allowedRoles: ['colaborador']
     }
   },
   {

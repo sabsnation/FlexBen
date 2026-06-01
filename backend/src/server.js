@@ -892,17 +892,24 @@ app.post(
     if (!cat) return res.status(404).json({ message: 'Categoria inválida ou inativa.' })
 
     const bal = await balanceInCategory(user.id, categoria)
-    if (bal < valor) {
-      return res.status(400).json({ message: 'Saldo insuficiente nesta categoria.' })
+    if (valor > bal + 0.001) {
+      return res.status(400).json({
+        message: `Saldo insuficiente. Disponível na categoria: R$ ${bal.toFixed(2)}.`
+      })
     }
 
-    const policyResult = await enforcePolicy({
+    let policyResult = { status: 'no_rule' }
+    try {
+      policyResult = await enforcePolicy({
       userId: user.id,
       role: user.role,
       category: categoria,
       amount: valor,
       costCenter
-    })
+      })
+    } catch (policyErr) {
+      return res.status(400).json({ message: policyErr.message || 'Política não permite este valor.' })
+    }
 
     const row = await prisma.transaction.create({
       data: {
@@ -1272,13 +1279,26 @@ app.get(
       em_analise: WORKFLOW_STATUS.EM_ANALISE,
       aprovado: WORKFLOW_STATUS.APROVADO,
       reprovado: WORKFLOW_STATUS.REPROVADO,
-      liquidado: WORKFLOW_STATUS.LIQUIDADO
+      liquidado: WORKFLOW_STATUS.LIQUIDADO,
+      concluida: WORKFLOW_STATUS.CONCLUIDA
     }
     const selected = mapStatus[rawStatus]
     const rows = await prisma.transaction.findMany({
       where: selected
         ? { status: selected, tipo: 'Saída' }
-        : { status: { in: [WORKFLOW_STATUS.PENDENTE, WORKFLOW_STATUS.EM_ANALISE, WORKFLOW_STATUS.APROVADO, WORKFLOW_STATUS.REPROVADO, WORKFLOW_STATUS.LIQUIDADO] }, tipo: 'Saída' },
+        : {
+            status: {
+              in: [
+                WORKFLOW_STATUS.PENDENTE,
+                WORKFLOW_STATUS.EM_ANALISE,
+                WORKFLOW_STATUS.APROVADO,
+                WORKFLOW_STATUS.REPROVADO,
+                WORKFLOW_STATUS.LIQUIDADO,
+                WORKFLOW_STATUS.CONCLUIDA
+              ]
+            },
+            tipo: 'Saída'
+          },
       include: { user: true },
       orderBy: { id: 'desc' }
     })

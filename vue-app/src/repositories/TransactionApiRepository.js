@@ -14,12 +14,16 @@ export class TransactionApiRepository {
   }
 
   async getMyBalances() {
-    const { balances } = await this.client.get('/me/balances')
-    return balances
+    const data = await this.client.get('/me/balances')
+    if (Array.isArray(data)) return data
+    return data?.balances || []
   }
 
   async getUserBalances(userId) {
-    return this.client.get(`/credits/users/${userId}/balances`)
+    const data = await this.client.get(`/credits/users/${userId}/balances`)
+    if (Array.isArray(data?.balances)) return data
+    if (Array.isArray(data)) return { balances: data }
+    return { balances: data?.balances || [] }
   }
 
   async createReallocation(payload) {

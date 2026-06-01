@@ -25,17 +25,29 @@ export const useTransactions = () => {
     return map
   }
 
+  const transactionsForBalance = () => {
+    const email = auth.user.value?.email?.toLowerCase()
+    if (!email || state.listScope === 'all') {
+      return state.items.filter(
+        (t) => !t.userEmail || t.userEmail.toLowerCase() === email
+      )
+    }
+    return state.items
+  }
+
   const rebuildBalancesFromTransactions = () => {
-    const email = auth.user.value?.email || ''
-    const cats = new Set(state.items.map((t) => t.categoria).filter(Boolean))
-    const map = {}
+    const email = auth.user.value?.email?.toLowerCase()
+    if (!email) return state.balancesByCategory
+    const mine = transactionsForBalance()
+    const cats = new Set(mine.map((t) => t.categoria).filter(Boolean))
+    const map = { ...state.balancesByCategory }
     for (const categoria of cats) {
       map[categoria] = {
-        saldo: balanceForCategory(state.items, email, categoria),
-        limite: state.balancesByCategory[categoria]?.limite || 0
+        saldo: balanceForCategory(mine, email, categoria),
+        limite: map[categoria]?.limite || 0
       }
     }
-    state.balancesByCategory = { ...state.balancesByCategory, ...map }
+    state.balancesByCategory = map
     return map
   }
 
@@ -53,18 +65,22 @@ export const useTransactions = () => {
   }
 
   const loadMine = async ({ scope } = {}) => {
-    const effectiveScope =
-      scope ?? (auth.isAdmin.value ? 'all' : undefined)
+    let effectiveScope = 'mine'
+    if (scope === 'all') effectiveScope = 'all'
+    else if (scope === 'mine') effectiveScope = 'mine'
+    else if (auth.isAdmin.value) effectiveScope = 'all'
+
     const data = await transactionRepository.list({
       scope: effectiveScope === 'all' ? 'all' : undefined
     })
     const { transactions, balances } = normalizeListPayload(data)
     state.items = transactions
     state.listScope = effectiveScope === 'all' ? 'all' : 'mine'
+
     if (Array.isArray(balances) && balances.length) {
       applyBalances(balances)
     } else {
-      rebuildBalancesFromTransactions()
+      await loadMyBalances()
     }
     return state.items
   }
@@ -72,15 +88,18 @@ export const useTransactions = () => {
   const loadMyBalances = async () => {
     try {
       const balances = await transactionRepository.getMyBalances()
-      applyBalances(balances)
-      return balances
+      if (Array.isArray(balances) && balances.length) {
+        applyBalances(balances)
+        return balances
+      }
     } catch {
-      rebuildBalancesFromTransactions()
-      return Object.entries(state.balancesByCategory).map(([categoria, row]) => ({
-        categoria,
-        ...row
-      }))
+      /* fallback abaixo */
     }
+    rebuildBalancesFromTransactions()
+    return Object.entries(state.balancesByCategory).map(([categoria, row]) => ({
+      categoria,
+      ...row
+    }))
   }
 
   const categoryBalance = (categoria) => {
@@ -93,18 +112,11 @@ export const useTransactions = () => {
     return state.balancesByCategory[key]?.limite ?? 0
   }
 
-  const myTransactions = computed(() => {
-    if (state.listScope === 'all') return state.items
-    const email = auth.user.value?.email?.toLowerCase()
-    if (!email) return state.items
-    return state.items.filter(
-      (t) => !t.userEmail || t.userEmail.toLowerCase() === email
-    )
-  })
+  const myTransactions = computed(() => state.items)
 
   const createReallocation = async (payload) => {
     await transactionRepository.createReallocation(payload)
-    await Promise.all([loadMine(), loadMyBalances()])
+    await Promise.all([loadMine({ scope: 'mine' }), loadMyBalances()])
   }
 
   const loadBalancesForUser = async (userId) => {
@@ -118,7 +130,7 @@ export const useTransactions = () => {
 
   const registerUsage = async (payload) => {
     await transactionRepository.registerUsage(payload)
-    await Promise.all([loadMine(), loadMyBalances()])
+    await Promise.all([loadMine({ scope: 'mine' }), loadMyBalances()])
   }
 
   const deleteTransaction = async (id) => {

@@ -31,28 +31,38 @@
           <span>Realocação na sua própria conta ({{ auth.user?.email }}).</span>
         </div>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label>Categoria de origem</label>
-            <select v-model="form.fromCategory">
-              <option v-for="c in activeCategories" :key="'o-' + c.id" :value="c.nome">
-                {{ c.nome }} (teto {{ formatCurrency(c.limite) }})
-              </option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Categoria de destino</label>
-            <select v-model="form.toCategory">
-              <option v-for="c in activeCategories" :key="'d-' + c.id" :value="c.nome">
-                {{ c.nome }} (teto {{ formatCurrency(c.limite) }})
-              </option>
-            </select>
-          </div>
+        <div class="form-group">
+          <label>Categoria de origem</label>
+          <CategoryBalancePicker
+            v-model="form.fromCategory"
+            :options="fromCategoryOptions"
+            empty-message="Nenhuma categoria com saldo para origem."
+          />
+        </div>
+        <div class="form-group">
+          <label>Categoria de destino</label>
+          <CategoryBalancePicker
+            v-model="form.toCategory"
+            :options="destCategoryOptions"
+            empty-message="Selecione outra categoria de destino."
+          />
         </div>
 
         <div class="form-group">
           <label>Valor a realocar (R$) <span class="req">*</span></label>
-          <input v-model.number="form.valor" type="number" min="0.01" step="0.01" placeholder="0,00" />
+          <input
+            v-model.number="form.valor"
+            type="number"
+            min="0.01"
+            :max="balFrom"
+            step="0.01"
+            placeholder="0,00"
+            :disabled="balFrom <= 0"
+            @blur="clampValor"
+          />
+          <p v-if="balFrom > 0" class="field-help">
+            Máximo na origem: <strong>{{ formatCurrency(balFrom) }}</strong>
+          </p>
         </div>
 
         <div class="form-group">
@@ -157,7 +167,9 @@ import { useToast } from '../toast'
 import { creditAllocationRepository } from '../repositories/CreditAllocationApiRepository.js'
 import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
+import CategoryBalancePicker from '../components/CategoryBalancePicker.vue'
 import Icon from '../components/Icon.vue'
+import { categoryColor } from '../config/chartTheme.js'
 
 const router = useRouter()
 const {
@@ -242,7 +254,7 @@ onMounted(async () => {
       selectedUserId.value = String(auth.user.value?.id || '')
       await reloadBalances()
       if (!balanceRows.value.some((r) => r.saldo > 0)) {
-        showToast('Nenhum saldo alocado. Peça ao RH para creditar suas categorias.', 'error')
+        showToast('Nenhum saldo alocado. Peça ao RH para creditar suas categorias.', 'info')
       }
     }
   } catch (e) {
@@ -253,6 +265,31 @@ onMounted(async () => {
 const form = reactive({ fromCategory: '', toCategory: '', valor: null, descricao: '' })
 
 const activeCategories = computed(() => categories.value.filter((c) => c.status !== 'Inativa'))
+
+const fromCategoryOptions = computed(() =>
+  balanceRows.value
+    .filter((r) => r.saldo > 0)
+    .map((r, i) => ({
+      value: r.categoria,
+      label: r.categoria,
+      saldo: r.saldo,
+      color: categoryColor(r.categoria, i),
+      disabled: false
+    }))
+)
+
+const destCategoryOptions = computed(() =>
+  activeCategories.value.map((c, i) => {
+    const saldo = categoryBalance(c.nome)
+    return {
+      value: c.nome,
+      label: c.nome,
+      saldo,
+      color: categoryColor(c.nome, i),
+      disabled: c.nome === form.fromCategory
+    }
+  })
+)
 
 watch(activeCategories, (list) => {
   if (!list.length) return
@@ -266,12 +303,15 @@ watch(activeCategories, (list) => {
   }
 })
 
-const balanceRows = computed(() =>
-  Object.entries(balancesByCategory.value)
-    .map(([categoria, row]) => ({ categoria, saldo: row.saldo, limite: row.limite }))
-    .filter((r) => r.saldo > 0 || r.limite > 0)
-    .sort((a, b) => b.saldo - a.saldo)
-)
+const balanceRows = computed(() => {
+  const fromApi = balancesByCategory.value
+  const rows = activeCategories.value.map((c) => ({
+    categoria: c.nome,
+    saldo: fromApi[c.nome]?.saldo ?? categoryBalance(c.nome),
+    limite: fromApi[c.nome]?.limite ?? (Number(c.limite) || 0)
+  }))
+  return rows.sort((a, b) => b.saldo - a.saldo)
+})
 
 const balFrom = computed(() => categoryBalance(form.fromCategory))
 const balTo = computed(() => categoryBalance(form.toCategory))
@@ -303,12 +343,22 @@ const submitDisabled = computed(() => {
 const formatCurrency = (v) =>
   Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
+const clampValor = () => {
+  const v = Number(form.valor)
+  if (!Number.isFinite(v) || v <= 0) {
+    form.valor = null
+    return
+  }
+  if (v > balFrom.value) form.valor = Math.round(balFrom.value * 100) / 100
+}
+
 const submit = async () => {
   if (loading.value) return
   if (!auth.can('credit_reallocate')) {
     showToast('Seu perfil não possui permissão para realocação.', 'error')
     return
   }
+  clampValor()
   loading.value = true
   try {
     const payload = {

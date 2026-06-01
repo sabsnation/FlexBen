@@ -51,17 +51,32 @@
           <span class="icon-bg sm"><Icon name="filter" :size="14" /></span>
           Filtros
         </span>
+        <button v-if="statusFilter || searchQuery" class="btn-link" type="button" @click="clearApprovalFilters">
+          Limpar filtros
+        </button>
       </h3>
+
+      <div class="filter-chips mb-2">
+        <button
+          v-for="chip in statusChipsWithCounts"
+          :key="chip.value"
+          type="button"
+          class="filter-chip"
+          :class="{ active: statusFilter === chip.value }"
+          @click="setStatusFilter(chip.value)"
+        >
+          {{ chip.label }}
+          <span class="filter-chip__count">{{ chip.count }}</span>
+        </button>
+      </div>
+
       <div class="form-row">
         <div class="form-group">
-          <label>Status</label>
-          <select v-model="statusFilter" @change="loadApprovals">
-            <option value="">Todos</option>
-            <option value="em_analise">Em análise</option>
-            <option value="aprovado">Aprovado</option>
-            <option value="reprovado">Reprovado</option>
-            <option value="liquidado">Liquidado</option>
-          </select>
+          <label>Buscar solicitante ou categoria</label>
+          <div class="input-wrap">
+            <Icon name="search" :size="14" class="input-icon" />
+            <input v-model="searchQuery" type="text" placeholder="Nome, e-mail ou categoria…" />
+          </div>
         </div>
         <div class="form-group">
           <label>SLA crítico (dias)</label>
@@ -288,9 +303,20 @@ const formatCurrency = (v) =>
 
 const activeTab = ref('usage')
 const approvals = ref([])
+const allApprovals = ref([])
 const ceilingApprovals = ref([])
 const statusFilter = ref('')
+const searchQuery = ref('')
 const thresholdDays = ref(7)
+
+const statusChips = [
+  { value: '', label: 'Todos' },
+  { value: 'em_analise', label: 'Em análise' },
+  { value: 'aprovado', label: 'Aprovados' },
+  { value: 'concluida', label: 'Concluídos' },
+  { value: 'reprovado', label: 'Reprovados' },
+  { value: 'liquidado', label: 'Liquidados' }
+]
 const sla = ref({
   kpis: { inAnalysis: 0, approved: 0, rejected: 0, avgApprovalHours: 0 },
   staleApprovals: []
@@ -337,7 +363,80 @@ const loadApprovals = async () => {
   const qs = statusFilter.value ? `?status=${statusFilter.value}` : ''
   const { approvals: rows } = await api.get(`/manager/approvals${qs}`)
   approvals.value = rows
+  if (!statusFilter.value) {
+    allApprovals.value = rows
+  }
 }
+
+const loadAllApprovalsForCounts = async () => {
+  try {
+    const { approvals: rows } = await api.get('/manager/approvals')
+    allApprovals.value = rows
+  } catch {
+    allApprovals.value = approvals.value
+  }
+}
+
+const setStatusFilter = async (value) => {
+  statusFilter.value = value
+  await loadApprovals()
+}
+
+const clearApprovalFilters = async () => {
+  statusFilter.value = ''
+  searchQuery.value = ''
+  await loadApprovals()
+}
+
+const filteredApprovals = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return approvals.value
+  return approvals.value.filter((item) => {
+    const hay = [
+      item.requesterName,
+      item.requesterEmail,
+      item.category,
+      item.description
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+    return hay.includes(q)
+  })
+})
+
+const emptyApprovalsMessage = computed(() => {
+  if (searchQuery.value.trim()) {
+    return 'Nenhum resultado para a busca. Tente outro termo ou limpe os filtros.'
+  }
+  if (statusFilter.value === 'aprovado') {
+    return 'Não há utilizações com status Aprovado no momento.'
+  }
+  if (statusFilter.value === 'concluida') {
+    return 'Não há utilizações concluídas automaticamente.'
+  }
+  return 'Sem itens para os filtros aplicados.'
+})
+
+const statusChipCounts = computed(() => {
+  const rows = allApprovals.value
+  const norm = (s) => normalizeStatus(s)
+  return {
+    '': rows.length,
+    em_analise: rows.filter((r) => isPending(r.status)).length,
+    aprovado: rows.filter((r) => norm(r.status) === 'aprovado').length,
+    concluida: rows.filter((r) => norm(r.status) === 'concluida').length,
+    reprovado: rows.filter((r) => norm(r.status) === 'reprovado').length,
+    liquidado: rows.filter((r) => norm(r.status) === 'liquidado').length
+  }
+})
+
+const statusChipsWithCounts = computed(() =>
+  statusChips.map((chip) => ({
+    ...chip,
+    count: statusChipCounts.value[chip.value] ?? 0
+  }))
+)
 
 const loadCeilingApprovals = async () => {
   try {
@@ -363,7 +462,12 @@ const loadSlaSummary = async () => {
 }
 
 const refresh = async (fromButton = false) => {
-  await Promise.allSettled([loadApprovals(), loadSlaSummary(), loadCeilingApprovals()])
+  await Promise.allSettled([
+    loadApprovals(),
+    loadAllApprovalsForCounts(),
+    loadSlaSummary(),
+    loadCeilingApprovals()
+  ])
   if (fromButton) showToast('Fila de aprovações atualizada.')
 }
 
@@ -479,5 +583,56 @@ onMounted(refresh)
   padding: 2px 8px;
   border-radius: var(--radius-full);
   font-size: 0.75rem;
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-light);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.filter-chip:hover {
+  border-color: color-mix(in srgb, var(--brand-primary) 35%, var(--border-light));
+}
+.filter-chip.active {
+  background: color-mix(in srgb, var(--brand-primary) 10%, var(--surface));
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+}
+.filter-chip__count {
+  min-width: 1.25rem;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--surface-soft);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+.filter-chip.active .filter-chip__count {
+  background: var(--brand-primary);
+  color: #fff;
+}
+.input-wrap { position: relative; }
+.input-wrap input { padding-left: 2.25rem; width: 100%; }
+.input-icon {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  color: var(--text-subtle);
+  pointer-events: none;
 }
 </style>

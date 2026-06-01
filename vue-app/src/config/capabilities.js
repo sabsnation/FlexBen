@@ -1,7 +1,7 @@
 export const CAPABILITIES = Object.freeze({
   transaction_view: ['colaborador', 'gestor', 'administrador', 'financeiro'],
   credit_reallocate: ['colaborador', 'gestor', 'administrador', 'financeiro'],
-  usage_register: ['colaborador', 'gestor', 'administrador', 'financeiro'],
+  usage_register: ['colaborador'],
   approval_decide: ['gestor', 'administrador'],
   ceiling_propose: ['financeiro', 'gestor', 'administrador'],
   ceiling_approve: ['gestor', 'administrador'],
