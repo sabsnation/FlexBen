@@ -6,9 +6,6 @@
       eyebrow="Operação RH"
     >
       <template #actions>
-        <button class="btn btn-secondary" type="button" @click="simulateUpload">
-          <Icon name="upload" :size="14" /> Simular CSV
-        </button>
         <button
           class="btn btn-primary"
           type="button"
@@ -158,12 +155,6 @@ const handleCarga = async () => {
   }
 }
 
-const simulateUpload = () => {
-  showToast(
-    `Validação simulada: ${activeCollaboratorsCount.value} colaborador(es) ativo(s) elegíveis.`,
-    'info'
-  )
-}
 </script>
 
 <style scoped>

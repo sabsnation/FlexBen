@@ -13,11 +13,11 @@ import RecuperarSenhaView from './views/RecuperarSenhaView.vue'
 import AdminUsersView from './views/AdminUsersView.vue'
 import AdminLoadView from './views/AdminLoadView.vue'
 import AdminAuditView from './views/AdminAuditView.vue'
-import ProjectBaseView from './views/ProjectBaseView.vue'
 import ManagerApprovalsView from './views/ManagerApprovalsView.vue'
 import RhPolicyBudgetView from './views/RhPolicyBudgetView.vue'
 import FinanceClosingView from './views/FinanceClosingView.vue'
 import CreditAllocationView from './views/CreditAllocationView.vue'
+import BenefitCeilingsView from './views/BenefitCeilingsView.vue'
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -34,13 +34,19 @@ const routes = [
     path: '/realocar',
     name: 'Realocar créditos',
     component: RealocacaoView,
-    meta: { requiresAuth: true, allowedRoles: ['colaborador', 'gestor', 'administrador', 'financeiro'] }
+    meta: {
+      requiresAuth: true,
+      allowedRoles: ['colaborador', 'gestor', 'administrador', 'financeiro']
+    }
   },
   {
     path: '/utilizacao',
     name: 'Registrar utilização',
     component: UtilizacaoView,
-    meta: { requiresAuth: true, allowedRoles: ['colaborador', 'gestor', 'administrador', 'financeiro'] }
+    meta: {
+      requiresAuth: true,
+      allowedRoles: ['colaborador', 'gestor', 'administrador', 'financeiro']
+    }
   },
   {
     path: '/transacoes',
@@ -94,19 +100,19 @@ const routes = [
     path: '/alocar-creditos',
     name: 'Alocar créditos',
     component: CreditAllocationView,
-    meta: { requiresAuth: true, allowedRoles: ['administrador', 'financeiro'] }
+    meta: { requiresAuth: true, allowedRoles: ['financeiro', 'gestor', 'administrador'] }
+  },
+  {
+    path: '/financeiro/tetos',
+    name: 'Tetos de benefícios',
+    component: BenefitCeilingsView,
+    meta: { requiresAuth: true, allowedRoles: ['financeiro', 'gestor', 'administrador'] }
   },
   {
     path: '/auditoria',
     name: 'Auditoria',
     component: AdminAuditView,
     meta: { requiresAuth: true, allowedRoles: ['administrador'] }
-  },
-  {
-    path: '/base-projeto',
-    name: 'Base Funcional',
-    component: ProjectBaseView,
-    meta: { requiresAuth: true, allowedRoles: ['gestor', 'administrador', 'financeiro'] }
   },
   { path: '/recuperar-senha', name: 'Recuperar Senha', component: RecuperarSenhaView }
 ]

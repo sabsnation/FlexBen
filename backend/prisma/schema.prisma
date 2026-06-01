@@ -71,3 +71,36 @@ model WorkflowEvent {
   @@index([transactionId])
   @@map("workflow_events")
 }
+
+model BenefitCeilingProposal {
+  id                 Int      @id @default(autoincrement())
+  requestType        String   @map("request_type")
+  categoryId         Int?     @map("category_id")
+  categoryName       String   @map("category_name")
+  employeeRole       String   @default("colaborador") @map("employee_role")
+  currentMonthlyCap  Float?   @map("current_monthly_cap")
+  proposedMonthlyCap Float    @map("proposed_monthly_cap")
+  proposedMaxPerTx   Float?   @map("proposed_max_per_tx")
+  status             String
+  justification      String?
+  requesterEmail     String   @map("requester_email")
+  requesterRole      String   @map("requester_role")
+  createdAt          String   @map("created_at")
+  events             CeilingProposalEvent[]
+
+  @@map("benefit_ceiling_proposals")
+}
+
+model CeilingProposalEvent {
+  id         Int                    @id @default(autoincrement())
+  proposalId Int                    @map("proposal_id")
+  proposal   BenefitCeilingProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  fromStatus String?                @map("from_status")
+  toStatus   String                 @map("to_status")
+  actorEmail String                 @map("actor_email")
+  note       String?
+  createdAt  String                 @map("created_at")
+
+  @@index([proposalId])
+  @@map("ceiling_proposal_events")
+}

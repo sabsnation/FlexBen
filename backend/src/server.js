@@ -16,6 +16,11 @@ import {
 } from './lib/audit.js'
 import { logBusinessEvent } from './lib/businessAudit.js'
 import { enforcePolicy, resolvePolicyRule } from './lib/policyEngine.js'
+import {
+  applyApprovedCeilingProposal,
+  requiresSuperiorApproval,
+  serializeCeilingProposal
+} from './lib/ceilingProposals.js'
 import { authRequired, adminRequired, roleRequired } from './middleware/auth.js'
 
 const PORT = Number(process.env.PORT || 3333)
@@ -124,6 +129,33 @@ const WORKFLOW_STATUS = Object.freeze({
   CONCLUIDA: 'Concluída',
   PENDENTE: 'Pendente'
 })
+
+const FINANCE_OPS_ROLES = ['financeiro', 'gestor', 'administrador']
+const CEILING_APPROVER_ROLES = ['gestor', 'administrador']
+
+async function transitionCeilingProposal({ proposalId, toStatus, actorEmail, note = '' }) {
+  const current = await prisma.benefitCeilingProposal.findUnique({ where: { id: proposalId } })
+  if (!current) {
+    const err = new Error('Proposta de teto não encontrada.')
+    err.statusCode = 404
+    throw err
+  }
+  const updated = await prisma.benefitCeilingProposal.update({
+    where: { id: proposalId },
+    data: { status: toStatus }
+  })
+  await prisma.ceilingProposalEvent.create({
+    data: {
+      proposalId,
+      fromStatus: current.status,
+      toStatus,
+      actorEmail,
+      note: note || null,
+      createdAt: new Date().toISOString()
+    }
+  })
+  return updated
+}
 
 function serializeWorkflowEvent(event) {
   return {
@@ -782,7 +814,7 @@ const CREDIT_ELIGIBLE_ROLES = ['colaborador', 'gestor']
 app.get(
   '/api/credits/eligible-users',
   authRequired,
-  roleRequired(['administrador', 'financeiro']),
+  roleRequired(FINANCE_OPS_ROLES),
   asyncHandler(async (_req, res) => {
     const users = await prisma.user.findMany({
       where: { status: 'Ativo', role: { in: CREDIT_ELIGIBLE_ROLES } },
@@ -823,7 +855,7 @@ app.get(
 app.post(
   '/api/credits/allocate',
   authRequired,
-  roleRequired(['administrador', 'financeiro']),
+  roleRequired(FINANCE_OPS_ROLES),
   asyncHandler(async (req, res) => {
     const userId = Number(req.body?.userId)
     const items = Array.isArray(req.body?.items) ? req.body.items : []
@@ -894,6 +926,223 @@ app.post(
     })
 
     res.status(201).json({ created: created.length, transactions: created })
+  })
+)
+
+app.get(
+  '/api/ceiling-proposals',
+  authRequired,
+  roleRequired(FINANCE_OPS_ROLES),
+  asyncHandler(async (req, res) => {
+    const rawStatus = String(req.query.status || '').trim().toLowerCase()
+    const mapStatus = {
+      em_analise: WORKFLOW_STATUS.EM_ANALISE,
+      aprovado: WORKFLOW_STATUS.APROVADO,
+      reprovado: WORKFLOW_STATUS.REPROVADO,
+      concluida: WORKFLOW_STATUS.CONCLUIDA,
+      pendente: WORKFLOW_STATUS.PENDENTE
+    }
+    const selected = mapStatus[rawStatus]
+    const pendingOnly = String(req.query.pendingApproval || '') === '1'
+
+    let where = selected ? { status: selected } : {}
+    if (pendingOnly) {
+      where = { status: { in: [WORKFLOW_STATUS.PENDENTE, WORKFLOW_STATUS.EM_ANALISE] } }
+    }
+
+    const rows = await prisma.benefitCeilingProposal.findMany({
+      where,
+      orderBy: { id: 'desc' }
+    })
+    res.json({ proposals: rows.map(serializeCeilingProposal) })
+  })
+)
+
+app.post(
+  '/api/ceiling-proposals',
+  authRequired,
+  roleRequired(FINANCE_OPS_ROLES),
+  asyncHandler(async (req, res) => {
+    const requestType = String(req.body?.requestType || '').trim().toLowerCase()
+    const categoryName = String(req.body?.categoryName || '').trim()
+    const categoryId = req.body?.categoryId != null ? Number(req.body.categoryId) : null
+    const proposedMonthlyCap = parseMoney(req.body?.proposedMonthlyCap)
+    const proposedMaxPerTx = parseMoney(req.body?.proposedMaxPerTx)
+    const justification = String(req.body?.justification || '').trim()
+    const employeeRole = String(req.body?.employeeRole || 'colaborador').trim()
+
+    if (!['create', 'increase', 'decrease'].includes(requestType)) {
+      return res.status(400).json({ message: 'Tipo de solicitação inválido.' })
+    }
+    if (!categoryName && requestType !== 'create') {
+      return res.status(400).json({ message: 'Informe a categoria do benefício.' })
+    }
+    if (requestType === 'create' && categoryName.length < 2) {
+      return res.status(400).json({ message: 'Nome da categoria inválido.' })
+    }
+    if (!proposedMonthlyCap || proposedMonthlyCap <= 0) {
+      return res.status(400).json({ message: 'Informe um teto mensal válido.' })
+    }
+    if (!justification || justification.length < 5) {
+      return res.status(400).json({ message: 'Justificativa obrigatória (mín. 5 caracteres).' })
+    }
+
+    let resolvedName = categoryName
+    let currentMonthlyCap = null
+    let resolvedCategoryId = categoryId
+
+    if (requestType !== 'create') {
+      const category = categoryId
+        ? await prisma.category.findUnique({ where: { id: categoryId } })
+        : await prisma.category.findFirst({ where: { nome: categoryName } })
+      if (!category) {
+        return res.status(404).json({ message: 'Categoria não encontrada.' })
+      }
+      resolvedName = category.nome
+      resolvedCategoryId = category.id
+      currentMonthlyCap = Number(category.limite)
+
+      if (requestType === 'increase' && proposedMonthlyCap <= currentMonthlyCap) {
+        return res.status(400).json({
+          message: 'Para aumento, o novo teto deve ser maior que o atual.'
+        })
+      }
+      if (requestType === 'decrease' && proposedMonthlyCap >= currentMonthlyCap) {
+        return res.status(400).json({
+          message: 'Para redução, o novo teto deve ser menor que o atual.'
+        })
+      }
+    } else {
+      const exists = await prisma.category.findFirst({ where: { nome: resolvedName } })
+      if (exists) {
+        return res.status(409).json({
+          message: 'Categoria já existe. Use solicitação de aumento em vez de criação.'
+        })
+      }
+    }
+
+    const needsApproval = requiresSuperiorApproval(
+      requestType,
+      currentMonthlyCap,
+      proposedMonthlyCap
+    )
+
+    const canAutoApplyDecrease =
+      requestType === 'decrease' &&
+      CEILING_APPROVER_ROLES.includes(req.auth.role) &&
+      !needsApproval
+
+    const initialStatus = canAutoApplyDecrease
+      ? WORKFLOW_STATUS.CONCLUIDA
+      : WORKFLOW_STATUS.EM_ANALISE
+
+    const row = await prisma.benefitCeilingProposal.create({
+      data: {
+        requestType,
+        categoryId: resolvedCategoryId,
+        categoryName: resolvedName,
+        employeeRole,
+        currentMonthlyCap,
+        proposedMonthlyCap,
+        proposedMaxPerTx: proposedMaxPerTx || null,
+        status: initialStatus,
+        justification,
+        requesterEmail: req.auth.email,
+        requesterRole: req.auth.role,
+        createdAt: new Date().toLocaleDateString('pt-BR')
+      }
+    })
+
+    await prisma.ceilingProposalEvent.create({
+      data: {
+        proposalId: row.id,
+        fromStatus: null,
+        toStatus: initialStatus,
+        actorEmail: req.auth.email,
+        note:
+          requestType === 'create'
+            ? 'Proposta de novo teto de benefício'
+            : `Proposta de ${requestType === 'increase' ? 'aumento' : 'redução'} de teto`,
+        createdAt: new Date().toISOString()
+      }
+    })
+
+    if (initialStatus === WORKFLOW_STATUS.CONCLUIDA) {
+      await applyApprovedCeilingProposal(row)
+    }
+
+    await logBusinessEvent({
+      action: 'CEILING_PROPOSAL_CREATED',
+      actorEmail: req.auth.email,
+      module: 'ceiling_proposals',
+      entityId: row.id,
+      payload: {
+        requestType,
+        categoryName: resolvedName,
+        proposedMonthlyCap,
+        status: initialStatus
+      }
+    })
+
+    res.status(201).json({ proposal: serializeCeilingProposal(row) })
+  })
+)
+
+app.post(
+  '/api/ceiling-proposals/:id/decision',
+  authRequired,
+  roleRequired(CEILING_APPROVER_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id)
+    const decision = String(req.body?.decision || '').trim().toLowerCase()
+    const justification = String(req.body?.justification || '').trim()
+    if (!['aprovado', 'reprovado'].includes(decision)) {
+      return res.status(400).json({ message: 'Decisão inválida.' })
+    }
+    if (!justification || justification.length < 5) {
+      return res.status(400).json({ message: 'Justificativa obrigatória (mín. 5 caracteres).' })
+    }
+
+    const proposal = await prisma.benefitCeilingProposal.findUnique({ where: { id } })
+    if (!proposal) return res.status(404).json({ message: 'Proposta não encontrada.' })
+    if (![WORKFLOW_STATUS.EM_ANALISE, WORKFLOW_STATUS.PENDENTE].includes(proposal.status)) {
+      return res.status(400).json({ message: 'Somente propostas em análise podem receber decisão.' })
+    }
+
+    if (decision === 'reprovado') {
+      const updated = await transitionCeilingProposal({
+        proposalId: id,
+        toStatus: WORKFLOW_STATUS.REPROVADO,
+        actorEmail: req.auth.email,
+        note: `Reprovado: ${justification}`
+      })
+      await logBusinessEvent({
+        action: 'CEILING_PROPOSAL_REJECTED',
+        actorEmail: req.auth.email,
+        module: 'ceiling_proposals',
+        entityId: id,
+        payload: { justification }
+      })
+      return res.json({ proposal: serializeCeilingProposal(updated) })
+    }
+
+    await applyApprovedCeilingProposal(proposal)
+    const updated = await transitionCeilingProposal({
+      proposalId: id,
+      toStatus: WORKFLOW_STATUS.CONCLUIDA,
+      actorEmail: req.auth.email,
+      note: `Aprovado e aplicado: ${justification}`
+    })
+
+    await logBusinessEvent({
+      action: 'CEILING_PROPOSAL_APPROVED',
+      actorEmail: req.auth.email,
+      module: 'ceiling_proposals',
+      entityId: id,
+      payload: { justification, categoryName: proposal.categoryName }
+    })
+
+    res.json({ proposal: serializeCeilingProposal(updated) })
   })
 )
 

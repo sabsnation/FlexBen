@@ -5,8 +5,8 @@
 
   <div v-else class="layout-wrapper">
     <div
-      class="sidebar-backdrop"
-      :class="{ 'is-visible': sidebarOpen }"
+      v-if="isMobileLayout && sidebarOpen"
+      class="sidebar-backdrop is-visible"
       aria-hidden="true"
       @click="closeSidebar"
     />
@@ -57,7 +57,8 @@
       <header class="top-header">
         <div class="top-header-left">
           <button
-            class="topbar-btn show-mobile-only"
+            v-if="isMobileLayout"
+            class="menu-toggle-btn"
             type="button"
             :aria-expanded="sidebarOpen"
             aria-label="Abrir menu de navegação"
@@ -110,9 +111,11 @@ import { useRouter, useRoute } from 'vue-router'
 import { computed, onMounted, ref, watch } from 'vue'
 import { getToken } from './api'
 import { NAV_SECTIONS } from './config/navigation'
+import { useBreakpoint } from './composables/useBreakpoint.js'
 import Icon from './components/Icon.vue'
 
-const { user, role, isAuthenticated, logout, refreshMe } = useAuth()
+const { user, role, isAuthenticated, logout, refreshMe, can } = useAuth()
+const { isMobileLayout } = useBreakpoint()
 const { toast } = useToast()
 const router = useRouter()
 const route = useRoute()
@@ -129,6 +132,10 @@ watch(
   () => route.path,
   () => closeSidebar()
 )
+
+watch(isMobileLayout, (mobile) => {
+  if (!mobile) closeSidebar()
+})
 
 onMounted(async () => {
   if (getToken()) {
@@ -153,7 +160,11 @@ const visibleSections = computed(() =>
     .filter((section) => section.roles.includes(role.value))
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => !item.roles || item.roles.includes(role.value))
+      items: section.items.filter((item) => {
+        if (item.roles && !item.roles.includes(role.value)) return false
+        if (item.capability && !can(item.capability)) return false
+        return true
+      })
     }))
     .filter((section) => section.items.length > 0)
 )

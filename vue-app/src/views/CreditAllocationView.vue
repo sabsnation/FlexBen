@@ -28,6 +28,11 @@
       <span>Seu perfil não possui permissão para alocar créditos.</span>
     </div>
 
+    <div v-else-if="loadError" class="notice danger mb-3">
+      <Icon class="notice-icon" name="alert-circle" :size="18" />
+      <span>{{ loadError }}</span>
+    </div>
+
     <div class="grid cols-2 mb-3">
       <div class="card">
         <h3 class="card-title">Colaborador</h3>
@@ -40,7 +45,7 @@
             @change="onUserChange"
           >
             <option value="">— Escolha um colaborador —</option>
-            <option v-for="u in eligibleUsers" :key="u.id" :value="u.id">
+            <option v-for="u in eligibleUsers" :key="u.id" :value="String(u.id)">
               {{ u.nome }} · {{ u.email }} ({{ roleLabel(u.role) }})
             </option>
           </select>
@@ -163,6 +168,7 @@ const {
 } = useCredits()
 
 const selectedUserId = ref('')
+const loadError = ref('')
 const loadingUsers = ref(false)
 const loadingBalances = ref(false)
 const submitting = ref(false)
@@ -209,8 +215,8 @@ const canSubmit = computed(
 )
 
 const onUserChange = async () => {
-  const id = Number(selectedUserId.value)
-  if (!id) {
+  const id = Number.parseInt(String(selectedUserId.value), 10)
+  if (!Number.isFinite(id) || id <= 0) {
     clearSelection()
     balanceRows.splice(0, balanceRows.length)
     return
@@ -235,10 +241,13 @@ const refreshBalances = async () => {
 
 onMounted(async () => {
   loadingUsers.value = true
+  loadError.value = ''
   try {
     await loadEligibleUsers()
   } catch (e) {
-    showToast(e.message || 'Falha ao listar colaboradores.', 'error')
+    const msg = e.message || 'Falha ao listar colaboradores.'
+    loadError.value = msg
+    showToast(msg, 'error')
   } finally {
     loadingUsers.value = false
   }
