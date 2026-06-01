@@ -3,7 +3,19 @@
   "installCommand": "npm install --prefix vue-app",
   "buildCommand": "npm run build --prefix vue-app",
   "outputDirectory": "vue-app/dist",
+  "build": {
+    "env": {
+      "VITE_API_BASE_URL": "/api"
+    }
+  },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "https://flexben.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }

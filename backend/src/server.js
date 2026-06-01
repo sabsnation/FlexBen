@@ -218,6 +218,15 @@ app.get(
         provider: getAuditProvider(),
         ready: isAuditReady()
       },
+      features: [
+        'auth',
+        'transactions',
+        'credits',
+        'ceiling-proposals',
+        'monthly-load',
+        'manager-approvals',
+        'finance-closing'
+      ],
       timestamp: new Date().toISOString()
     })
   })

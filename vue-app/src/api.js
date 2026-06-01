@@ -1,12 +1,7 @@
+import { resolveApiBase } from './config/apiConfig.js'
+
 const TOKEN_KEY = 'auth_token'
-
-function normalizeApiBase(base) {
-  const raw = (base || '/api').trim().replace(/\/+$/, '')
-  if (raw.endsWith('/api')) return raw
-  return `${raw}/api`
-}
-
-const API_BASE = normalizeApiBase(import.meta.env.VITE_API_BASE_URL)
+const API_BASE = resolveApiBase()
 
 export function getApiBase() {
   return API_BASE

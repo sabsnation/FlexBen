@@ -10,7 +10,7 @@ Guia oficial do **FlexBen**. Cobre:
 | Serviço | Função | URL típica |
 |---------|--------|------------|
 | **Vercel** | Frontend Vue (SPA) | `https://flexben.vercel.app` |
-| **Render** | Backend Node.js + PostgreSQL | `https://flexben-api.onrender.com` |
+| **Render** | Backend Node.js + PostgreSQL | `https://flexben.onrender.com` |
 | **MongoDB Atlas** | Auditoria NoSQL (opcional) | `mongodb+srv://...` |
 | **Firebase Firestore** | Auditoria NoSQL (opcional) | gerenciado |
 
@@ -32,7 +32,7 @@ Guia oficial do **FlexBen**. Cobre:
 
 | Nome | Valor |
 |------|-------|
-| `VITE_API_BASE_URL` | `https://flexben-api.onrender.com/api` |
+| `VITE_API_BASE_URL` | `/api` (recomendado — o `vercel.json` encaminha para `https://flexben.onrender.com/api`) |
 
 ### Comandos (caso prefira manual, Root = `vue-app`)
 

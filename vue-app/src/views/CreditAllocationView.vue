@@ -151,6 +151,7 @@ import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { useToast } from '../toast'
 import { useAuth } from '../auth'
 import { useCredits } from '../credits'
+import { api } from '../api'
 import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
 import Icon from '../components/Icon.vue'
@@ -243,6 +244,14 @@ onMounted(async () => {
   loadingUsers.value = true
   loadError.value = ''
   try {
+    const health = await api.get('/health')
+    if (!health?.features?.includes('credits')) {
+      const msg =
+        'A API publicada ainda não inclui alocação de créditos. Faça deploy do backend no Render (git push na branch main) e aguarde o build.'
+      loadError.value = msg
+      showToast(msg, 'error')
+      return
+    }
     await loadEligibleUsers()
   } catch (e) {
     const msg = e.message || 'Falha ao listar colaboradores.'
