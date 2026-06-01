@@ -8,8 +8,9 @@ export class TransactionApiRepository {
     this.client = client
   }
 
-  async list() {
-    return this.client.get('/transactions')
+  async list({ scope } = {}) {
+    const query = scope === 'all' ? '?scope=all' : ''
+    return this.client.get(`/transactions${query}`)
   }
 
   async getMyBalances() {

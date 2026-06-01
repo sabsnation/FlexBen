@@ -5,7 +5,9 @@ import { balanceForCategory } from './services/transactionService.js'
 
 const state = reactive({
   items: [],
-  balancesByCategory: {}
+  balancesByCategory: {},
+  /** 'mine' | 'all' — último carregamento de /transactions */
+  listScope: 'mine'
 })
 
 export const useTransactions = () => {
@@ -38,19 +40,27 @@ export const useTransactions = () => {
   }
 
   const normalizeListPayload = (data) => {
+    if (!data) {
+      return { transactions: [], balances: [] }
+    }
     if (Array.isArray(data)) {
       return { transactions: data, balances: [] }
     }
     return {
-      transactions: data?.transactions || [],
-      balances: data?.balances || []
+      transactions: data.transactions || [],
+      balances: data.balances || []
     }
   }
 
-  const loadMine = async () => {
-    const data = await transactionRepository.list()
+  const loadMine = async ({ scope } = {}) => {
+    const effectiveScope =
+      scope ?? (auth.isAdmin.value ? 'all' : undefined)
+    const data = await transactionRepository.list({
+      scope: effectiveScope === 'all' ? 'all' : undefined
+    })
     const { transactions, balances } = normalizeListPayload(data)
     state.items = transactions
+    state.listScope = effectiveScope === 'all' ? 'all' : 'mine'
     if (Array.isArray(balances) && balances.length) {
       applyBalances(balances)
     } else {
@@ -84,9 +94,12 @@ export const useTransactions = () => {
   }
 
   const myTransactions = computed(() => {
+    if (state.listScope === 'all') return state.items
     const email = auth.user.value?.email?.toLowerCase()
-    if (!email) return []
-    return state.items.filter((t) => t.userEmail === email)
+    if (!email) return state.items
+    return state.items.filter(
+      (t) => !t.userEmail || t.userEmail.toLowerCase() === email
+    )
   })
 
   const createReallocation = async (payload) => {

@@ -43,6 +43,11 @@ const FRONTEND_URLS = (process.env.FRONTEND_URL || '')
   .filter(Boolean)
 
 const app = express()
+app.set('etag', false)
+app.use('/api', (_req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+  next()
+})
 app.use(
   cors({
     origin(origin, callback) {

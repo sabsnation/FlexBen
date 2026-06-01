@@ -81,7 +81,11 @@ async function requestWithBase(base, path, options = {}) {
   const token = getToken()
   if (token) headers.Authorization = `Bearer ${token}`
 
-  const res = await fetch(buildUrl(base, path), { ...options, headers })
+  const res = await fetch(buildUrl(base, path), {
+    ...options,
+    headers,
+    cache: 'no-store'
+  })
 
   if (res.status === 204) return { res, data: null, text: '' }
 
@@ -110,7 +114,13 @@ async function request(path, options = {}) {
         throw err
       }
 
+      if (res.status === 304) {
+        throw new Error('Resposta em cache inválida. Atualize a página.')
+      }
       if (data === null && text) throw errorFromResponse(res, data, text)
+      if (data === null) {
+        throw new Error('Resposta vazia da API. Tente novamente.')
+      }
       return data
     } catch (e) {
       lastError = e
@@ -138,7 +148,11 @@ async function requestText(path, options = {}) {
       const token = getToken()
       if (token) headers.Authorization = `Bearer ${token}`
 
-      const res = await fetch(buildUrl(base, path), { ...options, headers })
+      const res = await fetch(buildUrl(base, path), {
+        ...options,
+        headers,
+        cache: 'no-store'
+      })
       const text = await res.text()
       if (!res.ok) {
         const data = parseResponseBody(text)
