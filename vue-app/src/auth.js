@@ -9,19 +9,49 @@ const state = reactive({
   registeredUsers: []
 })
 
+/** Avatar em base64 não vai ao localStorage (estoura cota no mobile). */
+function persistUserSession(user) {
+  state.user = user
+  if (!user) {
+    localStorage.removeItem('user')
+    return
+  }
+  const { avatarData: _drop, ...lite } = user
+  const payload = {
+    ...lite,
+    hasAvatar: Boolean(user.hasAvatar || user.avatarData)
+  }
+  try {
+    localStorage.setItem('user', JSON.stringify(payload))
+  } catch {
+    try {
+      localStorage.setItem(
+        'user',
+        JSON.stringify({
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          nome: user.nome,
+          hasAvatar: payload.hasAvatar
+        })
+      )
+    } catch {
+      /* sessão segue em memória */
+    }
+  }
+}
+
 export const useAuth = () => {
   const refreshMe = async () => {
     const { user } = await authRepository.me()
-    state.user = user
-    localStorage.setItem('user', JSON.stringify(user))
+    persistUserSession(user)
     return user
   }
 
   const login = async (email, senha) => {
     const { token, user } = await authRepository.login(email, senha)
     httpApiClient.setToken(token)
-    state.user = user
-    localStorage.setItem('user', JSON.stringify(user))
+    persistUserSession(user)
     return user
   }
 
@@ -30,9 +60,8 @@ export const useAuth = () => {
   }
 
   const logout = () => {
-    state.user = null
+    persistUserSession(null)
     httpApiClient.clearToken()
-    localStorage.removeItem('user')
   }
 
   const role = computed(() => state.user?.role || '')
@@ -75,8 +104,7 @@ export const useAuth = () => {
 
   const updateProfile = async (payload) => {
     const { user } = await authRepository.updateProfile(payload)
-    state.user = user
-    localStorage.setItem('user', JSON.stringify(user))
+    persistUserSession(user)
     return user
   }
 

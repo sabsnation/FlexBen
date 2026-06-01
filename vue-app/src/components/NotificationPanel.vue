@@ -100,7 +100,11 @@ const handleMarkAll = async () => {
 }
 
 const handleClick = async (n) => {
-  if (!n.read) await markRead(n.id)
+  try {
+    if (!n.read) await markRead(n.id)
+  } catch (err) {
+    console.warn('[notifications] markRead:', err)
+  }
   if (n.link) router.push(n.link)
   emit('close')
 }

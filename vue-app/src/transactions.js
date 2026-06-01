@@ -1,6 +1,7 @@
 import { reactive, computed } from 'vue'
 import { useAuth } from './auth'
 import { transactionRepository } from './repositories/TransactionApiRepository.js'
+import { balanceForCategory } from './services/transactionService.js'
 
 const state = reactive({
   items: [],
@@ -10,23 +11,55 @@ const state = reactive({
 export const useTransactions = () => {
   const auth = useAuth()
 
-  const loadMine = async () => {
-    const transactions = await transactionRepository.list()
-    state.items = transactions
-    return transactions
-  }
-
-  const loadMyBalances = async () => {
-    const balances = await transactionRepository.getMyBalances()
+  const applyBalances = (balances) => {
     const map = {}
-    for (const row of balances) {
+    for (const row of balances || []) {
       map[row.categoria] = {
         saldo: Number(row.saldo) || 0,
         limite: Number(row.limite) || 0
       }
     }
     state.balancesByCategory = map
-    return balances
+    return map
+  }
+
+  const rebuildBalancesFromTransactions = () => {
+    const email = auth.user.value?.email || ''
+    const cats = new Set(state.items.map((t) => t.categoria).filter(Boolean))
+    const map = {}
+    for (const categoria of cats) {
+      map[categoria] = {
+        saldo: balanceForCategory(state.items, email, categoria),
+        limite: state.balancesByCategory[categoria]?.limite || 0
+      }
+    }
+    state.balancesByCategory = { ...state.balancesByCategory, ...map }
+    return map
+  }
+
+  const loadMine = async () => {
+    const data = await transactionRepository.list()
+    state.items = data.transactions || []
+    if (Array.isArray(data.balances) && data.balances.length) {
+      applyBalances(data.balances)
+    } else {
+      rebuildBalancesFromTransactions()
+    }
+    return state.items
+  }
+
+  const loadMyBalances = async () => {
+    try {
+      const balances = await transactionRepository.getMyBalances()
+      applyBalances(balances)
+      return balances
+    } catch {
+      rebuildBalancesFromTransactions()
+      return Object.entries(state.balancesByCategory).map(([categoria, row]) => ({
+        categoria,
+        ...row
+      }))
+    }
   }
 
   const categoryBalance = (categoria) => {

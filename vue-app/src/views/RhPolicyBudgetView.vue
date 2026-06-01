@@ -2,7 +2,7 @@
   <div class="container">
     <PageHeader
       title="Painel executivo do RH"
-      subtitle="Governança corporativa, orçamento previsto × realizado e drill-down por centro de custo."
+      subtitle="Governança corporativa em gráficos — previsto × realizado e risco por centro de custo."
       eyebrow="RH / Admin"
     >
       <template #actions>
@@ -29,10 +29,18 @@
       </template>
     </PageHeader>
 
-    <div class="grid cols-3 mb-3">
-      <KpiCard label="Categorias ativas" :value="summary.activeCategories" tone="info" icon="layers" />
-      <KpiCard label="Orçamento mensal previsto" :value="summary.monthlyBudget" format="currency" tone="warning" icon="target" />
-      <KpiCard label="Colaboradores elegíveis" :value="summary.eligibleEmployees" tone="success" icon="users" />
+    <div class="grid cols-2 mb-3">
+      <ChartCard title="Programa de benefícios" subtitle="Estrutura do orçamento flex" icon="layers" :legend="programLegend">
+        <DonutChart
+          :segments="programDonut"
+          :size="200"
+          center-label="Orçamento"
+          :center-value="formatChartCurrency(summary.monthlyBudget)"
+        />
+      </ChartCard>
+      <ChartCard title="Previsto × realizado" subtitle="Consolidado do período selecionado" icon="target" :legend="overviewLegend">
+        <GroupedBarChart :groups="overviewBarGroups" :series="budgetSeries" />
+      </ChartCard>
     </div>
 
     <div class="tabs">
@@ -43,154 +51,107 @@
     </div>
 
     <div v-if="tab === 'executive'" class="stack">
-      <div class="grid cols-4">
-        <KpiCard label="Previsto total" :value="executive.overview.predictedTotal" format="currency" icon="target" />
-        <KpiCard label="Realizado total" :value="executive.overview.realizedTotal" format="currency" tone="info" icon="bar-chart" />
-        <KpiCard
-          label="Desvio total"
-          :value="executive.overview.totalDeviation"
-          format="currency"
-          :tone="executive.overview.totalDeviation > 0 ? 'danger' : 'success'"
-          icon="trending-up"
-        />
-        <KpiCard
-          label="Uso do orçamento"
-          :value="executive.overview.usagePercent"
-          format="percent"
-          :tone="executive.overview.usagePercent > 100 ? 'danger' : executive.overview.usagePercent > 80 ? 'warning' : 'success'"
-          icon="activity"
-        />
+      <div class="grid cols-2">
+        <ChartCard title="Composição do orçamento" icon="pie-chart" :legend="usageLegend">
+          <DonutChart
+            :segments="usageDonut"
+            :size="200"
+            center-label="Uso global"
+            :center-value="`${executive.overview.usagePercent.toFixed(0)}%`"
+          />
+        </ChartCard>
+        <ChartCard title="Desvio consolidado" icon="trending-up">
+          <BarChart :items="deviationSummaryBars" />
+        </ChartCard>
       </div>
+      <ChartCard
+        v-if="topCategoryGroups.length"
+        title="Top categorias — previsto vs realizado"
+        subtitle="Comparativo por bolso de benefício"
+        icon="bar-chart"
+      >
+        <GroupedBarChart :groups="topCategoryGroups" :series="budgetSeries" />
+      </ChartCard>
     </div>
 
     <div v-if="tab === 'deviation'">
-      <EmptyState v-if="!executive.categoryDeviation.length" icon="bar-chart" title="Sem dados de desvio" message="Nenhuma movimentação no período selecionado." />
-      <div v-else class="table-wrapper scrollable">
-        <table>
-          <thead>
-            <tr>
-              <th>Categoria</th>
-              <th>Centro de custo</th>
-              <th>Previsto</th>
-              <th>Realizado</th>
-              <th>Desvio</th>
-              <th>Uso</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in executive.categoryDeviation" :key="'dev-' + row.category">
-              <td><strong>{{ row.category }}</strong></td>
-              <td>{{ row.costCenter }}</td>
-              <td>{{ formatCurrency(row.predicted) }}</td>
-              <td>{{ formatCurrency(row.realized) }}</td>
-              <td :class="row.deviation > 0 ? 'text-danger font-bold' : 'text-success font-bold'">
-                {{ formatCurrency(row.deviation) }}
-              </td>
-              <td>
-                <span class="badge" :class="usageBadge(row.usagePercent)">{{ row.usagePercent.toFixed(1) }}%</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <EmptyState
+        v-if="!deviationBarItems.length"
+        icon="bar-chart"
+        title="Sem dados de desvio"
+        message="Nenhuma movimentação no período selecionado."
+      />
+      <div v-else class="grid cols-2">
+        <ChartCard title="Realizado por categoria" icon="bar-chart" :legend="deviationLegend">
+          <BarChart :items="deviationBarItems" />
+        </ChartCard>
+        <ChartCard title="% de uso por categoria" icon="activity">
+          <BarChart
+            :items="usageByCategoryBars"
+            :format-value="(v) => `${Number(v).toFixed(0)}%`"
+          />
+        </ChartCard>
       </div>
     </div>
 
     <div v-if="tab === 'risk'" class="stack">
-      <EmptyState v-if="!executive.costCenterRiskRanking.length" icon="target" title="Sem dados de risco" message="Nenhum centro de custo com movimentação no período." />
-      <div v-else class="table-wrapper scrollable">
-        <table>
-          <thead>
-            <tr>
-              <th>Centro de custo</th>
-              <th>Categorias</th>
-              <th>Previsto</th>
-              <th>Realizado</th>
-              <th>Uso</th>
-              <th>Desvio</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in executive.costCenterRiskRanking" :key="'cc-' + row.costCenter">
-              <td>
-                <button class="btn-link" type="button" @click="loadCenterDetails(row.costCenter)">
-                  {{ row.costCenter }}
-                </button>
-              </td>
-              <td>{{ row.categories }}</td>
-              <td>{{ formatCurrency(row.predicted) }}</td>
-              <td>{{ formatCurrency(row.realized) }}</td>
-              <td>
-                <span class="badge" :class="usageBadge(row.usagePercent)">{{ row.usagePercent.toFixed(1) }}%</span>
-              </td>
-              <td :class="row.deviation > 0 ? 'text-danger font-bold' : 'text-success font-bold'">
-                {{ formatCurrency(row.deviation) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <EmptyState
+        v-if="!riskBarItems.length"
+        icon="target"
+        title="Sem dados de risco"
+        message="Nenhum centro de custo com movimentação no período."
+      />
+      <div v-else class="grid cols-2">
+        <ChartCard title="Uso por centro de custo" icon="target" :legend="riskLegend">
+          <BarChart
+            :items="riskBarItems"
+            :format-value="(v) => `${Number(v).toFixed(0)}%`"
+          />
+        </ChartCard>
+        <ChartCard title="Realizado por centro" icon="dollar-sign">
+          <BarChart :items="riskRealizedBars" />
+        </ChartCard>
       </div>
 
       <div v-if="centerDetails.costCenter" class="card">
         <div class="page-header" style="margin-bottom: 1rem; padding-bottom: 1rem;">
           <div class="page-header__text">
             <h3>Drill-down: {{ centerDetails.costCenter }}</h3>
-            <p class="muted">
-              Previsto {{ formatCurrency(centerDetails.summary.predicted) }} ·
-              Realizado {{ formatCurrency(centerDetails.summary.realized) }} ·
-              Uso {{ centerDetails.summary.usagePercent.toFixed(1) }}%
-            </p>
+            <p class="muted">Clique em outro centro na lista para alternar</p>
           </div>
           <button class="btn btn-secondary" type="button" @click="clearCenterDetails">
             <Icon name="x" :size="12" /> Fechar
           </button>
         </div>
+        <ChartCard title="Categorias do centro" icon="layers" class="nested-chart">
+          <BarChart :items="centerCategoryBars" />
+        </ChartCard>
+      </div>
 
-        <h4 class="mb-2">Categorias impactadas</h4>
-        <div class="table-wrapper mb-3">
+      <div class="card">
+        <h4 class="mb-2">Centros de custo — clique para detalhar</h4>
+        <div class="table-wrapper scrollable">
           <table>
             <thead>
               <tr>
-                <th>Categoria</th>
-                <th>Previsto</th>
-                <th>Realizado</th>
-                <th>Desvio</th>
+                <th>Centro</th>
                 <th>Uso</th>
+                <th>Ação</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in centerDetails.categories" :key="'detail-cat-' + row.category">
-                <td><strong>{{ row.category }}</strong></td>
-                <td>{{ formatCurrency(row.predicted) }}</td>
-                <td>{{ formatCurrency(row.realized) }}</td>
-                <td>{{ formatCurrency(row.deviation) }}</td>
-                <td>{{ row.usagePercent.toFixed(1) }}%</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <h4 class="mb-2">Solicitações relacionadas</h4>
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Solicitante</th>
-                <th>Categoria</th>
-                <th>Valor</th>
-                <th>Status</th>
-                <th>Data</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="req in centerDetails.requests" :key="'detail-req-' + req.id">
-                <td>{{ req.requesterName }}</td>
-                <td>{{ req.category }}</td>
-                <td>{{ formatCurrency(req.amount) }}</td>
-                <td><StatusBadge :status="req.status" /></td>
-                <td class="muted">{{ req.requestedAt }}</td>
-              </tr>
-              <tr v-if="!centerDetails.requests.length">
-                <td colspan="5" class="table-empty">Sem solicitações para este centro de custo.</td>
+              <tr v-for="row in executive.costCenterRiskRanking" :key="'cc-' + row.costCenter">
+                <td><strong>{{ row.costCenter }}</strong></td>
+                <td>
+                  <span class="badge" :class="usageBadge(row.usagePercent)">
+                    {{ row.usagePercent.toFixed(1) }}%
+                  </span>
+                </td>
+                <td>
+                  <button class="btn btn-ghost btn-sm" type="button" @click="loadCenterDetails(row.costCenter)">
+                    Detalhar
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -199,50 +160,35 @@
     </div>
 
     <div v-if="tab === 'policies'">
-      <EmptyState v-if="!policies.length" icon="settings" title="Nenhuma política configurada" message="Cadastre políticas no banco para regras automáticas." />
-      <div v-else class="table-wrapper scrollable">
-        <table>
-          <thead>
-            <tr>
-              <th>Categoria</th>
-              <th>Perfil</th>
-              <th>Limite padrão</th>
-              <th>Máx. por transação</th>
-              <th>Aprovação</th>
-              <th>Centro de custo</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="p in policies" :key="p.id">
-              <td><strong>{{ p.category }}</strong></td>
-              <td>{{ p.role }}</td>
-              <td>{{ formatCurrency(p.limit) }}</td>
-              <td>{{ formatCurrency(p.maxPerTransaction) }}</td>
-              <td>
-                <span class="badge" :class="p.requiresApproval ? 'badge-warning' : 'badge-success'">
-                  {{ p.requiresApproval ? 'Obrigatória' : 'Automática' }}
-                </span>
-              </td>
-              <td>{{ p.costCenter }}</td>
-              <td><StatusBadge :status="p.status" /></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <EmptyState
+        v-if="!policies.length"
+        icon="settings"
+        title="Nenhuma política configurada"
+        message="Cadastre políticas no banco para regras automáticas."
+      />
+      <ChartCard v-else title="Políticas por categoria" subtitle="Limite padrão configurado" icon="settings">
+        <BarChart :items="policyBarItems" />
+      </ChartCard>
     </div>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api } from '../api'
 import { useToast } from '../toast'
 import PageHeader from '../components/PageHeader.vue'
-import KpiCard from '../components/KpiCard.vue'
-import StatusBadge from '../components/StatusBadge.vue'
 import EmptyState from '../components/EmptyState.vue'
 import Icon from '../components/Icon.vue'
+import ChartCard from '../components/charts/ChartCard.vue'
+import DonutChart from '../components/charts/DonutChart.vue'
+import BarChart from '../components/charts/BarChart.vue'
+import GroupedBarChart from '../components/charts/GroupedBarChart.vue'
+import {
+  categoryColor,
+  formatChartCurrency,
+  colorAt
+} from '../config/chartTheme.js'
 
 const formatCurrency = (v) =>
   Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -274,6 +220,159 @@ const yearOptions = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear()
 const { showToast } = useToast()
 const refreshing = ref(false)
 
+const budgetSeries = [
+  { name: 'Previsto', key: 'predicted', color: '#6366f1' },
+  { name: 'Realizado', key: 'realized', color: '#0ea5e9' }
+]
+
+const programDonut = computed(() => [
+  { label: 'Categorias', value: summary.value.activeCategories, color: '#6366f1' },
+  { label: 'Colaboradores', value: summary.value.eligibleEmployees, color: '#10b981' },
+  { label: 'Orçamento (k)', value: summary.value.monthlyBudget / 1000, color: '#f59e0b' }
+].filter((s) => s.value > 0))
+
+const programLegend = computed(() =>
+  programDonut.value.map((s) => ({
+    label: s.label,
+    color: s.color,
+    value: s.label === 'Orçamento (k)' ? formatChartCurrency(summary.value.monthlyBudget) : String(Math.round(s.value))
+  }))
+)
+
+const overviewBarGroups = computed(() => [
+  {
+    label: 'Total',
+    predicted: executive.value.overview.predictedTotal,
+    realized: executive.value.overview.realizedTotal
+  }
+])
+
+const overviewLegend = computed(() => [
+  { label: 'Previsto', color: '#6366f1', value: formatChartCurrency(executive.value.overview.predictedTotal) },
+  { label: 'Realizado', color: '#0ea5e9', value: formatChartCurrency(executive.value.overview.realizedTotal) },
+  {
+    label: 'Desvio',
+    color: executive.value.overview.totalDeviation > 0 ? '#ef4444' : '#10b981',
+    value: formatChartCurrency(executive.value.overview.totalDeviation)
+  }
+])
+
+const usageDonut = computed(() => {
+  const used = Math.min(100, executive.value.overview.usagePercent)
+  return [
+    { label: 'Utilizado', value: used, color: '#6366f1' },
+    { label: 'Disponível', value: Math.max(0, 100 - used), color: '#e2e8f0' }
+  ]
+})
+
+const usageLegend = computed(() => [
+  { label: 'Uso global', color: '#6366f1', value: `${executive.value.overview.usagePercent.toFixed(1)}%` }
+])
+
+const deviationSummaryBars = computed(() => [
+  { label: 'Previsto', value: executive.value.overview.predictedTotal, color: '#6366f1' },
+  { label: 'Realizado', value: executive.value.overview.realizedTotal, color: '#0ea5e9' },
+  {
+    label: 'Desvio',
+    value: Math.abs(executive.value.overview.totalDeviation),
+    color: executive.value.overview.totalDeviation > 0 ? '#ef4444' : '#10b981'
+  }
+])
+
+const topCategoryGroups = computed(() => {
+  const byCat = new Map()
+  for (const row of executive.value.categoryDeviation) {
+    const cur = byCat.get(row.category) || { label: row.category, predicted: 0, realized: 0 }
+    cur.predicted += row.predicted
+    cur.realized += row.realized
+    byCat.set(row.category, cur)
+  }
+  return [...byCat.values()]
+    .sort((a, b) => b.realized - a.realized)
+    .slice(0, 6)
+})
+
+const deviationBarItems = computed(() => {
+  const byCat = new Map()
+  for (const row of executive.value.categoryDeviation) {
+    byCat.set(row.category, (byCat.get(row.category) || 0) + row.realized)
+  }
+  return [...byCat.entries()]
+    .map(([label, value], i) => ({ label, value, color: categoryColor(label, i) }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10)
+})
+
+const deviationLegend = computed(() =>
+  deviationBarItems.value.slice(0, 5).map((s) => ({
+    label: s.label,
+    color: s.color,
+    value: formatChartCurrency(s.value)
+  }))
+)
+
+const usageByCategoryBars = computed(() => {
+  const byCat = new Map()
+  for (const row of executive.value.categoryDeviation) {
+    const cur = byCat.get(row.category)
+    if (!cur || row.usagePercent > cur) byCat.set(row.category, row.usagePercent)
+  }
+  return [...byCat.entries()]
+    .map(([label, value], i) => ({
+      label,
+      value,
+      color: value > 100 ? '#ef4444' : value > 80 ? '#f59e0b' : colorAt(i)
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10)
+})
+
+const riskBarItems = computed(() =>
+  executive.value.costCenterRiskRanking
+    .map((row, i) => ({
+      label: row.costCenter,
+      value: row.usagePercent,
+      color: row.usagePercent > 100 ? '#ef4444' : row.usagePercent > 80 ? '#f59e0b' : colorAt(i)
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10)
+)
+
+const riskRealizedBars = computed(() =>
+  executive.value.costCenterRiskRanking
+    .map((row, i) => ({
+      label: row.costCenter,
+      value: row.realized,
+      color: colorAt(i)
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10)
+)
+
+const riskLegend = computed(() =>
+  riskBarItems.value.slice(0, 4).map((s) => ({
+    label: s.label,
+    color: s.color,
+    value: `${s.value.toFixed(0)}%`
+  }))
+)
+
+const centerCategoryBars = computed(() =>
+  centerDetails.value.categories.map((row, i) => ({
+    label: row.category,
+    value: row.realized,
+    color: categoryColor(row.category, i)
+  }))
+)
+
+const policyBarItems = computed(() =>
+  policies.value.map((p, i) => ({
+    label: `${p.category} (${p.role})`,
+    value: p.limit,
+    color: categoryColor(p.category, i)
+  }))
+)
+
 const usageBadge = (pct) => {
   if (pct > 100) return 'badge-danger'
   if (pct > 80) return 'badge-warning'
@@ -304,6 +403,7 @@ const loadCenterDetails = async (costCenter) => {
     const q = `costCenter=${encodeURIComponent(costCenter)}&month=${period.value.month}&year=${period.value.year}`
     const data = await api.get(`/executive/cost-center-details?${q}`)
     centerDetails.value = data
+    tab.value = 'risk'
   } catch (err) {
     showToast(err.message, 'error')
   }
@@ -330,4 +430,9 @@ onMounted(load)
   align-items: flex-end;
 }
 .period-row .form-group { min-width: 140px; }
+.nested-chart {
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
 </style>

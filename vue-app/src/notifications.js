@@ -20,8 +20,11 @@ export const useNotifications = () => {
   }
 
   const markRead = async (id) => {
-    const { notification } = await notificationRepository.markRead(id)
-    state.items = state.items.map((n) => (n.id === id ? notification : n))
+    const nid = Number(id)
+    const { notification } = await notificationRepository.markRead(nid)
+    state.items = state.items.map((n) =>
+      Number(n.id) === nid ? { ...n, ...notification, read: true } : n
+    )
     state.unreadCount = state.items.filter((n) => !n.read).length
   }
 

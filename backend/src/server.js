@@ -24,6 +24,10 @@ import {
 import { authRequired, adminRequired, roleRequired } from './middleware/auth.js'
 import { registerCreditRoutes } from './routes/credits.routes.js'
 import { syncNotificationsForUser, serializeNotification } from './lib/notifications.js'
+import {
+  API_JSON_BODY_LIMIT,
+  validateAvatarBase64
+} from './lib/avatarLimits.js'
 
 const PORT = Number(process.env.PORT || 3333)
 const JWT_SECRET = process.env.JWT_SECRET || 'flexben-dev-secret'
@@ -54,7 +58,8 @@ app.use(
     credentials: true
   })
 )
-app.use(express.json())
+app.use(express.json({ limit: API_JSON_BODY_LIMIT }))
+app.use(express.urlencoded({ extended: true, limit: API_JSON_BODY_LIMIT }))
 app.use(morgan('dev'))
 
 function asyncHandler(fn) {
@@ -378,10 +383,11 @@ app.patch(
     const data = {}
     if (nome.length >= 2) data.nome = nome
     if (avatarData !== undefined) {
-      if (avatarData && avatarData.length > 600_000) {
-        return res.status(400).json({ message: 'Imagem muito grande. Use até ~400 KB.' })
+      const avatarError = validateAvatarBase64(avatarData)
+      if (avatarError) {
+        return res.status(400).json({ message: avatarError })
       }
-      data.avatarData = avatarData || null
+      data.avatarData = avatarData ? String(avatarData).trim() : null
     }
     if (!Object.keys(data).length) {
       return res.status(400).json({ message: 'Nenhum dado para atualizar.' })
@@ -655,7 +661,26 @@ app.get(
       include: { user: true },
       orderBy: { id: 'desc' }
     })
-    res.json({ transactions: rows.map(serializeTransaction) })
+
+    let balances = []
+    if (mineOnly) {
+      const activeCategories = await prisma.category.findMany({
+        where: { status: { not: 'Inativa' } },
+        orderBy: { nome: 'asc' }
+      })
+      balances = await Promise.all(
+        activeCategories.map(async (c) => ({
+          categoria: c.nome,
+          limite: Number(c.limite),
+          saldo: await balanceInCategory(req.auth.id, c.nome)
+        }))
+      )
+    }
+
+    res.json({
+      transactions: rows.map(serializeTransaction),
+      balances
+    })
   })
 )
 
@@ -744,22 +769,8 @@ app.post(
 
     const balFrom = await balanceInCategory(user.id, fromCategory)
     if (balFrom < valor) {
-      return res.status(400).json({ message: 'Saldo insuficiente na categoria de origem.' })
-    }
-
-    await enforcePolicy({
-      userId: user.id,
-      role: user.role,
-      category: toCategory,
-      amount: valor,
-      costCenter
-    })
-
-    const balTo = await balanceInCategory(user.id, toCategory)
-    const teto = Number(destCat.limite)
-    if (balTo + valor > teto) {
       return res.status(400).json({
-        message: `Realocação excede o teto da categoria "${toCategory}" (R$ ${teto.toFixed(2)}).`
+        message: `Saldo insuficiente na categoria de origem. Disponível: R$ ${balFrom.toFixed(2)}.`
       })
     }
 
@@ -1702,6 +1713,12 @@ app.get(
 
 app.use((err, _req, res, _next) => {
   console.error(err)
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return res.status(413).json({
+      message:
+        'Arquivo muito grande. O app comprime fotos automaticamente; tente outra imagem ou atualize a página.'
+    })
+  }
   if (err.code === 'P2002') {
     return res.status(409).json({ message: 'Registro duplicado.' })
   }

@@ -8,13 +8,24 @@
         </div>
         <label class="btn btn-secondary btn-sm upload-btn">
           <Icon name="upload" :size="14" />
-          Enviar foto
-          <input type="file" accept="image/jpeg,image/png,image/webp" hidden @change="onFile" />
+          {{ uploadingImage ? 'Processando…' : 'Enviar foto' }}
+          <input
+            ref="fileInput"
+            type="file"
+            class="file-input"
+            accept="image/*"
+            capture="user"
+            @change="onFile"
+          />
         </label>
+        <p class="upload-hint muted text-xs">
+          Fotos da câmera são comprimidas automaticamente (até 8 MB, ~800 KB após ajuste).
+        </p>
         <button
           v-if="avatarPreview || user?.hasAvatar"
           type="button"
           class="btn btn-ghost btn-sm"
+          :disabled="uploadingImage"
           @click="clearAvatar"
         >
           Remover foto
@@ -63,7 +74,7 @@
 
     <template #footer>
       <button type="button" class="btn btn-ghost" @click="emit('close')">Cancelar</button>
-      <button type="button" class="btn btn-primary" :disabled="saving" @click="save">
+      <button type="button" class="btn btn-primary" :disabled="saving || uploadingImage" @click="save">
         <Icon v-if="saving" name="spinner" :size="14" class="spin" />
         <span v-else>Salvar alterações</span>
       </button>
@@ -75,6 +86,10 @@
 import { ref, computed, watch } from 'vue'
 import { useAuth } from '../auth.js'
 import { useToast } from '../toast.js'
+import {
+  resizeImageForAvatar,
+  MAX_AVATAR_FILE_BYTES
+} from '../services/imageResize.js'
 import Modal from './Modal.vue'
 import Icon from './Icon.vue'
 
@@ -89,6 +104,8 @@ const { showToast } = useToast()
 const nome = ref('')
 const avatarPreview = ref('')
 const avatarDirty = ref(false)
+const uploadingImage = ref(false)
+const fileInput = ref(null)
 const currentPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
@@ -118,42 +135,67 @@ const avatarStyle = computed(() => {
   return { background: 'linear-gradient(135deg, #6366f1, #4338ca)' }
 })
 
+async function loadAvatarPreview() {
+  if (user.value?.avatarData) {
+    avatarPreview.value = user.value.avatarData
+    return
+  }
+  if (!user.value?.hasAvatar) {
+    avatarPreview.value = ''
+    return
+  }
+  try {
+    await auth.refreshMe()
+    avatarPreview.value = auth.user.value?.avatarData || ''
+  } catch {
+    avatarPreview.value = ''
+  }
+}
+
 watch(
   () => props.open,
-  (isOpen) => {
+  async (isOpen) => {
     if (!isOpen) return
     nome.value = user.value?.nome || ''
-    avatarPreview.value = user.value?.avatarData || ''
     avatarDirty.value = false
     currentPassword.value = ''
     newPassword.value = ''
     confirmPassword.value = ''
+    await loadAvatarPreview()
   }
 )
 
-const onFile = (e) => {
+const onFile = async (e) => {
   const file = e.target.files?.[0]
+  if (e.target) e.target.value = ''
   if (!file) return
-  if (file.size > 400_000) {
-    showToast('Imagem muito grande. Use até ~400 KB.', 'error')
+
+  if (file.size > MAX_AVATAR_FILE_BYTES) {
+    showToast('Arquivo muito grande. O limite é 8 MB por foto.', 'error')
     return
   }
-  const reader = new FileReader()
-  reader.onload = () => {
-    avatarPreview.value = reader.result
+
+  uploadingImage.value = true
+  try {
+    const dataUrl = await resizeImageForAvatar(file)
+    avatarPreview.value = dataUrl
     avatarDirty.value = true
+    showToast('Foto pronta. Clique em Salvar para confirmar.')
+  } catch (err) {
+    showToast(err.message || 'Não foi possível usar esta imagem.', 'error')
+  } finally {
+    uploadingImage.value = false
   }
-  reader.readAsDataURL(file)
-  e.target.value = ''
 }
 
 const clearAvatar = () => {
   avatarPreview.value = ''
   avatarDirty.value = true
+  if (fileInput.value) fileInput.value.value = ''
 }
 
 const save = async () => {
-  if (saving.value) return
+  if (saving.value || uploadingImage.value) return
   const trimmed = nome.value.trim()
   if (trimmed.length < 2) {
     showToast('Informe um nome válido.', 'error')
@@ -228,10 +270,27 @@ const save = async () => {
   object-fit: cover;
 }
 .upload-btn {
+  position: relative;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  overflow: hidden;
+}
+.file-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 0;
+}
+.upload-hint {
+  text-align: center;
+  max-width: 280px;
+  line-height: 1.4;
+  margin: 0;
 }
 .divider {
   border: none;

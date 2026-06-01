@@ -150,7 +150,11 @@ const profileOpen = ref(false)
 const toggleNotifications = async () => {
   notificationsOpen.value = !notificationsOpen.value
   if (notificationsOpen.value) {
-    await loadNotifications()
+    try {
+      await loadNotifications()
+    } catch {
+      /* painel ainda abre; badge atualiza no próximo load */
+    }
   }
 }
 const toggleSidebar = () => {

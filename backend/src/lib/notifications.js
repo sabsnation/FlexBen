@@ -35,9 +35,7 @@ export async function upsertNotification(userId, dedupeKey, data) {
       title: data.title,
       message: data.message,
       type: data.type || 'info',
-      link: data.link || null,
-      read: false,
-      createdAt: new Date().toISOString()
+      link: data.link || null
     }
   })
 }
@@ -130,7 +128,7 @@ export function serializeNotification(row) {
     message: row.message,
     type: row.type,
     link: row.link || '',
-    read: row.read,
+    read: Boolean(row.read),
     createdAt: row.createdAt
   }
 }

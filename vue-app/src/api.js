@@ -61,6 +61,11 @@ function errorFromResponse(res, data, text) {
     }
     return new Error('Recurso não encontrado na API.')
   }
+  if (res.status === 413) {
+    return new Error(
+      data?.message || 'Arquivo muito grande. Use uma foto menor ou deixe o app comprimir automaticamente.'
+    )
+  }
   if (res.status >= 500) return new Error('Erro interno no servidor. Tente novamente em instantes.')
   if (text && text.startsWith('<')) {
     return new Error('Resposta inválida da API. Verifique a URL da API no deploy.')

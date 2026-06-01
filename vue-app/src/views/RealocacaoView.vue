@@ -106,8 +106,8 @@
           </div>
           <div class="preview-row total">
             <span class="muted">Saldo na destino após</span>
-            <strong :style="{ color: destAfter > destTeto ? 'var(--brand-danger)' : 'var(--brand-accent)' }">
-              {{ formatCurrency(destAfter) }} / teto {{ formatCurrency(destTeto) }}
+            <strong style="color: var(--brand-accent)">
+              {{ formatCurrency(destAfter) }}
             </strong>
           </div>
         </div>
@@ -148,7 +148,6 @@ const {
   loadMine,
   loadMyBalances,
   categoryBalance,
-  categoryLimit,
   balancesByCategory
 } = useTransactions()
 const { categories, loadCategories } = useCategories()
@@ -169,28 +168,52 @@ const reloadBalances = async () => {
   }
 }
 
+const pickDefaultCategories = () => {
+  const rows = balanceRows.value.filter((r) => r.saldo > 0)
+  if (!rows.length) return
+  const best = rows.reduce((a, b) => (b.saldo > a.saldo ? b : a))
+  form.fromCategory = best.categoria
+  const dest = rows.find((r) => r.categoria !== form.fromCategory) || rows[0]
+  if (dest && dest.categoria !== form.fromCategory) {
+    form.toCategory = dest.categoria
+  }
+}
+
 onMounted(async () => {
   balancesLoading.value = true
-  await Promise.allSettled([loadMine(), loadCategories(), loadMyBalances()])
-  balancesLoading.value = false
+  try {
+    await loadCategories()
+    await loadMine()
+    await loadMyBalances()
+    pickDefaultCategories()
+    if (!balanceRows.value.some((r) => r.saldo > 0)) {
+      showToast(
+        'Nenhum saldo disponível. Peça ao RH para alocar créditos ou confira se o backend foi reiniciado.',
+        'error'
+      )
+    }
+  } catch (e) {
+    showToast(e.message || 'Falha ao carregar dados para realocação.', 'error')
+  } finally {
+    balancesLoading.value = false
+  }
 })
 
 const form = reactive({ fromCategory: '', toCategory: '', valor: null, descricao: '' })
 
 const activeCategories = computed(() => categories.value.filter((c) => c.status !== 'Inativa'))
 
-watch(
-  activeCategories,
-  (list) => {
-    if (!list.length) return
-    if (!list.some((c) => c.nome === form.fromCategory)) form.fromCategory = list[0].nome
-    if (!list.some((c) => c.nome === form.toCategory) || form.toCategory === form.fromCategory) {
-      const alt = list.find((c) => c.nome !== form.fromCategory)
-      form.toCategory = alt ? alt.nome : list[0].nome
-    }
-  },
-  { immediate: true }
-)
+watch(activeCategories, (list) => {
+  if (!list.length) return
+  if (!list.some((c) => c.nome === form.fromCategory)) {
+    pickDefaultCategories()
+    if (!form.fromCategory) form.fromCategory = list[0].nome
+  }
+  if (!list.some((c) => c.nome === form.toCategory) || form.toCategory === form.fromCategory) {
+    const alt = list.find((c) => c.nome !== form.fromCategory)
+    form.toCategory = alt ? alt.nome : list[0].nome
+  }
+})
 
 const balanceRows = computed(() =>
   Object.entries(balancesByCategory.value)
@@ -202,12 +225,6 @@ const balanceRows = computed(() =>
 const balFrom = computed(() => categoryBalance(form.fromCategory))
 const balTo = computed(() => categoryBalance(form.toCategory))
 
-const destCat = computed(() => activeCategories.value.find((c) => c.nome === form.toCategory))
-const destTeto = computed(() => {
-  const fromApi = categoryLimit(form.toCategory)
-  if (fromApi > 0) return fromApi
-  return Number(destCat.value?.limite || 0)
-})
 const destAfter = computed(() => balTo.value + (form.valor || 0))
 
 const warningMessage = computed(() => {
@@ -217,9 +234,6 @@ const warningMessage = computed(() => {
   }
   if (v > 0 && balFrom.value < v) {
     return `Saldo insuficiente na origem. Disponível: ${formatCurrency(balFrom.value)}.`
-  }
-  if (v > 0 && destAfter.value > destTeto.value) {
-    return `Operação ultrapassaria o teto da categoria destino (${formatCurrency(destTeto.value)}).`
   }
   return ''
 })
@@ -231,7 +245,6 @@ const submitDisabled = computed(() => {
   if (!form.fromCategory || !form.toCategory) return true
   if (form.fromCategory === form.toCategory) return true
   if (balFrom.value < v) return true
-  if (destAfter.value > destTeto.value) return true
   return false
 })
 

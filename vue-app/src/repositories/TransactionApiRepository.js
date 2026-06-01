@@ -9,8 +9,7 @@ export class TransactionApiRepository {
   }
 
   async list() {
-    const { transactions } = await this.client.get('/transactions')
-    return transactions
+    return this.client.get('/transactions')
   }
 
   async getMyBalances() {
