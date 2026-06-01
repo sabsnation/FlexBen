@@ -4,9 +4,16 @@
   </div>
 
   <div v-else class="layout-wrapper">
-    <aside class="sidebar">
+    <div
+      class="sidebar-backdrop"
+      :class="{ 'is-visible': sidebarOpen }"
+      aria-hidden="true"
+      @click="closeSidebar"
+    />
+
+    <aside class="sidebar" :class="{ 'sidebar--open': sidebarOpen }">
       <div class="sidebar-header">
-        <div class="brand-mark">CB</div>
+        <div class="brand-mark">FB</div>
         <div class="sidebar-brand">
           <span class="sidebar-brand__name">FlexBen</span>
           <span class="sidebar-brand__tag">FLEX · 2026</span>
@@ -21,6 +28,7 @@
             :key="item.to"
             :to="item.to"
             class="sidebar-link"
+            @click="closeSidebar"
           >
             <span class="menu-icon">
               <Icon :name="item.icon" :size="16" :stroke-width="2" />
@@ -47,10 +55,21 @@
 
     <main class="main-content">
       <header class="top-header">
-        <div class="breadcrumb">
+        <div class="top-header-left">
+          <button
+            class="topbar-btn show-mobile-only"
+            type="button"
+            :aria-expanded="sidebarOpen"
+            aria-label="Abrir menu de navegação"
+            @click="toggleSidebar"
+          >
+            <Icon name="menu" :size="18" />
+          </button>
+          <div class="breadcrumb">
           <span>{{ sectionTitle }}</span>
           <span v-if="currentLabel && currentLabel !== sectionTitle" class="divider">/</span>
           <span v-if="currentLabel && currentLabel !== sectionTitle" class="current">{{ currentLabel }}</span>
+          </div>
         </div>
 
         <div class="topbar-right">
@@ -88,7 +107,7 @@
 import { useAuth } from './auth'
 import { useToast } from './toast'
 import { useRouter, useRoute } from 'vue-router'
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { getToken } from './api'
 import { NAV_SECTIONS } from './config/navigation'
 import Icon from './components/Icon.vue'
@@ -97,6 +116,19 @@ const { user, role, isAuthenticated, logout, refreshMe } = useAuth()
 const { toast } = useToast()
 const router = useRouter()
 const route = useRoute()
+
+const sidebarOpen = ref(false)
+const toggleSidebar = () => {
+  sidebarOpen.value = !sidebarOpen.value
+}
+const closeSidebar = () => {
+  sidebarOpen.value = false
+}
+
+watch(
+  () => route.path,
+  () => closeSidebar()
+)
 
 onMounted(async () => {
   if (getToken()) {

@@ -28,6 +28,7 @@ export const NAV_SECTIONS = Object.freeze([
       { to: '/categorias', label: 'Categorias & Limites', icon: 'layers' },
       { to: '/usuarios', label: 'Usuários', icon: 'users' },
       { to: '/carga', label: 'Carga Mensal', icon: 'upload' },
+      { to: '/alocar-creditos', label: 'Alocar créditos', icon: 'dollar-sign' },
       { to: '/auditoria', label: 'Auditoria', icon: 'shield' }
     ]
   },
@@ -36,7 +37,8 @@ export const NAV_SECTIONS = Object.freeze([
     title: 'Financeiro',
     roles: ['financeiro', 'administrador'],
     items: [
-      { to: '/financeiro/fechamento', label: 'Fechamento Mensal', icon: 'dollar-sign' }
+      { to: '/financeiro/fechamento', label: 'Fechamento Mensal', icon: 'bar-chart' },
+      { to: '/alocar-creditos', label: 'Alocar créditos', icon: 'dollar-sign' }
     ]
   },
   {

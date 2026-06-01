@@ -5,6 +5,7 @@ export const CAPABILITIES = Object.freeze({
   approval_decide: ['gestor', 'administrador'],
   policy_manage: ['administrador'],
   monthly_load_run: ['administrador'],
+  credit_allocate: ['administrador', 'financeiro'],
   closing_run: ['financeiro', 'administrador'],
   audit_view: ['administrador']
 })

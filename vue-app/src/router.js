@@ -17,6 +17,7 @@ import ProjectBaseView from './views/ProjectBaseView.vue'
 import ManagerApprovalsView from './views/ManagerApprovalsView.vue'
 import RhPolicyBudgetView from './views/RhPolicyBudgetView.vue'
 import FinanceClosingView from './views/FinanceClosingView.vue'
+import CreditAllocationView from './views/CreditAllocationView.vue'
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -88,6 +89,12 @@ const routes = [
     name: 'Carga Mensal',
     component: AdminLoadView,
     meta: { requiresAuth: true, allowedRoles: ['administrador'] }
+  },
+  {
+    path: '/alocar-creditos',
+    name: 'Alocar créditos',
+    component: CreditAllocationView,
+    meta: { requiresAuth: true, allowedRoles: ['administrador', 'financeiro'] }
   },
   {
     path: '/auditoria',

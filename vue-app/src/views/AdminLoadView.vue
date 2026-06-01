@@ -36,7 +36,16 @@
 
     <div v-if="!auth.can('monthly_load_run')" class="notice info">
       <Icon class="notice-icon" name="info" :size="18" />
-      <span>Apenas administradores podem executar a carga.</span>
+      <span>Apenas administradores podem executar a carga em massa.</span>
+    </div>
+
+    <div class="notice info mb-3">
+      <Icon class="notice-icon" name="info" :size="18" />
+      <span>
+        Para creditar um colaborador específico, use
+        <RouterLink to="/alocar-creditos">Alocar créditos</RouterLink>
+        (RH/Admin e Financeiro).
+      </span>
     </div>
 
     <div class="card">
