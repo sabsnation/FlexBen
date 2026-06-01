@@ -1,10 +1,26 @@
-import { resolveApiBase } from './config/apiConfig.js'
+import { resolveApiBase, PRODUCTION_RENDER_ORIGIN } from './config/apiConfig.js'
 
 const TOKEN_KEY = 'auth_token'
-const API_BASE = resolveApiBase()
+
+function getCandidateBases() {
+  const primary = resolveApiBase()
+  const bases = [primary]
+  const renderApi = `${PRODUCTION_RENDER_ORIGIN}/api`
+
+  if (!primary.includes('onrender.com')) {
+    bases.push(renderApi)
+  }
+
+  if (typeof window !== 'undefined') {
+    const sameOrigin = `${window.location.origin}/api`
+    if (!bases.includes(sameOrigin)) bases.unshift(sameOrigin)
+  }
+
+  return [...new Set(bases)]
+}
 
 export function getApiBase() {
-  return API_BASE
+  return resolveApiBase()
 }
 
 export function getToken() {
@@ -19,9 +35,9 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY)
 }
 
-function buildUrl(path) {
+function buildUrl(base, path) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
-  return `${API_BASE}${normalizedPath}`
+  return `${base}${normalizedPath}`
 }
 
 function parseResponseBody(text) {
@@ -38,18 +54,21 @@ function errorFromResponse(res, data, text) {
   if (res.status === 401) return new Error('Sessão expirada. Faça login novamente.')
   if (res.status === 403) return new Error('Acesso negado para o seu perfil.')
   if (res.status === 404) {
-    return new Error(
-      'Recurso não encontrado na API. Confirme se o backend está atualizado e em execução.'
-    )
+    if (text && text.includes('Cannot GET')) {
+      return new Error(
+        'Rota de alocação indisponível nesta API. Aguarde o deploy do backend no Render (1–3 min após o push).'
+      )
+    }
+    return new Error('Recurso não encontrado na API.')
   }
   if (res.status >= 500) return new Error('Erro interno no servidor. Tente novamente em instantes.')
   if (text && text.startsWith('<')) {
-    return new Error('Resposta inválida da API (HTML). Verifique a URL configurada em VITE_API_BASE_URL.')
+    return new Error('Resposta inválida da API. Verifique a URL da API no deploy.')
   }
   return new Error(`Falha na requisição (HTTP ${res.status}).`)
 }
 
-async function request(path, options = {}) {
+async function requestWithBase(base, path, options = {}) {
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {})
@@ -57,43 +76,83 @@ async function request(path, options = {}) {
   const token = getToken()
   if (token) headers.Authorization = `Bearer ${token}`
 
-  let res
-  try {
-    res = await fetch(buildUrl(path), { ...options, headers })
-  } catch {
-    throw new Error(
-      'Sem conexão com a API. Inicie o backend (npm run dev:backend) ou verifique VITE_API_BASE_URL.'
-    )
-  }
+  const res = await fetch(buildUrl(base, path), { ...options, headers })
 
-  if (res.status === 204) return null
+  if (res.status === 204) return { res, data: null, text: '' }
 
   const text = await res.text()
   const data = parseResponseBody(text)
+  return { res, data, text }
+}
 
-  if (!res.ok) throw errorFromResponse(res, data, text)
-  if (data === null && text) throw errorFromResponse(res, data, text)
-  return data
+async function request(path, options = {}) {
+  const bases = getCandidateBases()
+  let lastError
+
+  for (let i = 0; i < bases.length; i += 1) {
+    const base = bases[i]
+    try {
+      const { res, data, text } = await requestWithBase(base, path, options)
+
+      if (!res.ok) {
+        const err = errorFromResponse(res, data, text)
+        const isMissingRoute =
+          res.status === 404 && text && (text.includes('Cannot GET') || text.includes('Cannot POST'))
+        if (isMissingRoute && i < bases.length - 1) {
+          lastError = err
+          continue
+        }
+        throw err
+      }
+
+      if (data === null && text) throw errorFromResponse(res, data, text)
+      return data
+    } catch (e) {
+      lastError = e
+      const isNetwork = e instanceof TypeError || e.message?.includes('Failed to fetch')
+      if (isNetwork && i < bases.length - 1) continue
+      if (i < bases.length - 1 && e.message?.includes('indisponível')) continue
+      throw e
+    }
+  }
+
+  throw (
+    lastError ||
+    new Error('Sem conexão com a API. Verifique o backend no Render ou use npm run dev localmente.')
+  )
 }
 
 async function requestText(path, options = {}) {
-  const headers = { ...(options.headers || {}) }
-  const token = getToken()
-  if (token) headers.Authorization = `Bearer ${token}`
+  const bases = getCandidateBases()
+  let lastError
 
-  let res
-  try {
-    res = await fetch(buildUrl(path), { ...options, headers })
-  } catch {
-    throw new Error('Sem conexão com a API.')
+  for (let i = 0; i < bases.length; i += 1) {
+    const base = bases[i]
+    try {
+      const headers = { ...(options.headers || {}) }
+      const token = getToken()
+      if (token) headers.Authorization = `Bearer ${token}`
+
+      const res = await fetch(buildUrl(base, path), { ...options, headers })
+      const text = await res.text()
+      if (!res.ok) {
+        const data = parseResponseBody(text)
+        const err = errorFromResponse(res, data, text)
+        if (res.status === 404 && i < bases.length - 1) {
+          lastError = err
+          continue
+        }
+        throw err
+      }
+      return text
+    } catch (e) {
+      lastError = e
+      if (i < bases.length - 1) continue
+      throw e
+    }
   }
 
-  const text = await res.text()
-  if (!res.ok) {
-    const data = parseResponseBody(text)
-    throw errorFromResponse(res, data, text)
-  }
-  return text
+  throw lastError || new Error('Sem conexão com a API.')
 }
 
 export const api = {
