@@ -3,6 +3,7 @@ import { httpApiClient } from './adapters/HttpApiClient.js'
 import { authRepository } from './repositories/AuthApiRepository.js'
 import { userRepository } from './repositories/UserApiRepository.js'
 import { roleCan } from './config/capabilities'
+import { getToken } from './api.js'
 
 const state = reactive({
   user: JSON.parse(localStorage.getItem('user')) || null,
@@ -11,12 +12,17 @@ const state = reactive({
 
 /** Avatar em base64 não vai ao localStorage (estoura cota no mobile). */
 function persistUserSession(user) {
-  state.user = user
   if (!user) {
+    state.user = null
     localStorage.removeItem('user')
     return
   }
-  const { avatarData: _drop, ...lite } = user
+  const normalized = {
+    ...user,
+    email: String(user.email || '').trim().toLowerCase()
+  }
+  state.user = normalized
+  const { avatarData: _drop, ...lite } = normalized
   const payload = {
     ...lite,
     hasAvatar: Boolean(user.hasAvatar || user.avatarData)
@@ -115,7 +121,7 @@ export const useAuth = () => {
   return {
     user: computed(() => state.user),
     role,
-    isAuthenticated: computed(() => !!state.user),
+    isAuthenticated: computed(() => !!state.user && !!getToken()),
     isAdmin,
     isManager,
     isFinance,

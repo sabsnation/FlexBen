@@ -56,9 +56,12 @@ defineProps({
   font-size: 0.8rem;
 }
 .chart-card__body {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
+  width: 100%;
+  position: relative;
+}
+.chart-card__body :deep(canvas) {
+  max-width: 100%;
 }
 .chart-legend {
   list-style: none;

@@ -1,30 +1,6 @@
 <template>
-  <div class="donut-wrap" :style="{ width: size + 'px', height: size + 'px' }">
-    <svg :viewBox="`0 0 ${size} ${size}`" class="donut-svg">
-      <circle
-        :cx="cx"
-        :cy="cy"
-        :r="r"
-        fill="none"
-        stroke="var(--surface-soft)"
-        :stroke-width="thickness"
-      />
-      <circle
-        v-for="(seg, i) in arcSegments"
-        :key="'arc-' + i"
-        :cx="cx"
-        :cy="cy"
-        :r="r"
-        fill="none"
-        :stroke="seg.color"
-        :stroke-width="thickness"
-        stroke-linecap="butt"
-        :stroke-dasharray="seg.dash"
-        :stroke-dashoffset="seg.offset"
-        transform="rotate(-90)"
-        :transform-origin="`${cx}px ${cy}px`"
-      />
-    </svg>
+  <div class="donut-wrap" :style="{ height: size + 'px' }">
+    <Doughnut :data="chartData" :options="chartOptions" />
     <div v-if="centerLabel || centerValue" class="donut-center">
       <span v-if="centerValue" class="donut-center__value">{{ centerValue }}</span>
       <span v-if="centerLabel" class="donut-center__label">{{ centerLabel }}</span>
@@ -34,55 +10,83 @@
 
 <script setup>
 import { computed } from 'vue'
+import { Doughnut } from 'vue-chartjs'
 import { colorAt } from '../../config/chartTheme.js'
+import {
+  ensureChartJs,
+  basePlugins,
+  currencyTooltipLabel
+} from './chartJsSetup.js'
+
+ensureChartJs()
 
 const props = defineProps({
   segments: { type: Array, default: () => [] },
-  size: { type: Number, default: 200 },
+  size: { type: Number, default: 220 },
   thickness: { type: Number, default: 26 },
   centerLabel: { type: String, default: '' },
   centerValue: { type: String, default: '' }
 })
 
-const cx = computed(() => props.size / 2)
-const cy = computed(() => props.size / 2)
-const r = computed(() => (props.size - props.thickness) / 2 - 4)
-
-const total = computed(() =>
-  props.segments.reduce((sum, s) => sum + Math.max(0, Number(s.value) || 0), 0)
+const activeSegments = computed(() =>
+  props.segments.filter((s) => Number(s.value) > 0)
 )
 
-const circumference = computed(() => 2 * Math.PI * r.value)
+const chartData = computed(() => ({
+  labels: activeSegments.value.map((s) => s.label),
+  datasets: [
+    {
+      data: activeSegments.value.map((s) => Number(s.value) || 0),
+      backgroundColor: activeSegments.value.map((s, i) => s.color || colorAt(i)),
+      borderColor: '#ffffff',
+      borderWidth: 3,
+      hoverBorderColor: '#ffffff',
+      hoverOffset: 10,
+      borderRadius: 6,
+      spacing: 2
+    }
+  ]
+}))
 
-const arcSegments = computed(() => {
-  if (!total.value) return []
-  let offset = 0
-  const circ = circumference.value
-  return props.segments
-    .filter((s) => Number(s.value) > 0)
-    .map((s, i) => {
-      const frac = Number(s.value) / total.value
-      const dash = `${frac * circ} ${circ}`
-      const seg = {
-        color: s.color || colorAt(i),
-        dash,
-        offset: -offset
-      }
-      offset += frac * circ
-      return seg
-    })
+const cutoutPct = computed(() => {
+  const ratio = 1 - props.thickness / props.size
+  return `${Math.round(Math.min(0.82, Math.max(0.5, ratio)) * 100)}%`
 })
+
+const chartOptions = computed(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  cutout: cutoutPct.value,
+  animation: {
+    animateRotate: true,
+    animateScale: true,
+    duration: 900,
+    easing: 'easeOutQuart'
+  },
+  plugins: {
+    ...basePlugins(),
+    tooltip: {
+      ...basePlugins().tooltip,
+      callbacks: {
+        label(ctx) {
+          const label = ctx.label || ''
+          const val = currencyTooltipLabel(ctx.parsed)
+          const total = ctx.dataset.data.reduce((a, b) => a + b, 0)
+          const pct = total ? ((ctx.parsed / total) * 100).toFixed(1) : 0
+          return `${label}: ${val} (${pct}%)`
+        }
+      }
+    }
+  }
+}))
 </script>
 
 <style scoped>
 .donut-wrap {
   position: relative;
-  margin: 0 auto;
-}
-.donut-svg {
   width: 100%;
-  height: 100%;
-  display: block;
+  max-width: 280px;
+  margin: 0 auto;
 }
 .donut-center {
   position: absolute;
@@ -92,11 +96,11 @@ const arcSegments = computed(() => {
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 1.5rem;
+  padding: 2rem;
   pointer-events: none;
 }
 .donut-center__value {
-  font-size: 1.05rem;
+  font-size: 1.15rem;
   font-weight: 800;
   color: var(--text-strong);
   letter-spacing: -0.02em;

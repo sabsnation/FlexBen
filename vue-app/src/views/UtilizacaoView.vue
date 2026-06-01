@@ -122,7 +122,11 @@ watch(
 )
 
 onMounted(async () => {
-  await Promise.allSettled([loadCategories(), loadMine(), loadMyBalances()])
+  const results = await Promise.allSettled([loadCategories(), loadMine(), loadMyBalances()])
+  const failed = results.find((r) => r.status === 'rejected')
+  if (failed) {
+    showToast(failed.reason?.message || 'Falha ao carregar dados para utilização.', 'error')
+  }
 })
 
 const currentBal = computed(() => categoryBalance(form.categoria))

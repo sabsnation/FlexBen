@@ -37,11 +37,22 @@ export const useTransactions = () => {
     return map
   }
 
+  const normalizeListPayload = (data) => {
+    if (Array.isArray(data)) {
+      return { transactions: data, balances: [] }
+    }
+    return {
+      transactions: data?.transactions || [],
+      balances: data?.balances || []
+    }
+  }
+
   const loadMine = async () => {
     const data = await transactionRepository.list()
-    state.items = data.transactions || []
-    if (Array.isArray(data.balances) && data.balances.length) {
-      applyBalances(data.balances)
+    const { transactions, balances } = normalizeListPayload(data)
+    state.items = transactions
+    if (Array.isArray(balances) && balances.length) {
+      applyBalances(balances)
     } else {
       rebuildBalancesFromTransactions()
     }

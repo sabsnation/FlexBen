@@ -1751,9 +1751,9 @@ const server = app.listen(PORT, () => {
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
-    console.error(
-      `[erro] Porta ${PORT} já está em uso. Encerre o outro backend (ex.: kill $(lsof -t -i:${PORT})) ou altere PORT no .env.`
-    )
+    console.error(`[erro] Porta ${PORT} já está em uso.`)
+    console.error(`  → Rode: npm run dev:kill-port   (ou: kill $(lsof -t -i:${PORT}))`)
+    console.error(`  → Ou altere PORT no arquivo backend/.env`)
     process.exit(1)
   }
   throw err

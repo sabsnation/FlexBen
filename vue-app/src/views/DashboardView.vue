@@ -115,10 +115,11 @@
         <ChartCard title="Fila de aprovações" subtitle="Distribuição por status" icon="check-circle" :legend="approvalLegend">
           <DonutChart :segments="approvalDonut" :size="180" center-label="Total" :center-value="String(approvalTotal)" />
         </ChartCard>
-        <ChartCard title="SLA de aprovação" subtitle="Tempo médio de decisão" icon="clock">
+        <ChartCard title="SLA de aprovação" subtitle="Tempo médio de decisão" icon="clock" min-height="260px">
           <BarChart
             :items="slaBarItems"
             :horizontal="false"
+            :height="220"
           />
         </ChartCard>
       </div>
@@ -219,6 +220,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useTransactions } from '../transactions'
 import { useCategories } from '../categories'
 import { useAuth } from '../auth'
+import { useToast } from '../toast'
 import { api } from '../api'
 import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
@@ -242,8 +244,14 @@ const manager = ref({ kpis: { inAnalysis: 0, approved: 0, rejected: 0, avgApprov
 const executive = ref({ predictedTotal: 0, realizedTotal: 0, totalDeviation: 0, usagePercent: 0 })
 const finance = ref({ referenceMonth: '', approvedTotal: 0, pendingCount: 0 })
 
+const { showToast } = useToast()
+
 onMounted(async () => {
-  await Promise.allSettled([loadMine(), loadCategories(), loadMyBalances()])
+  const results = await Promise.allSettled([loadMine(), loadCategories(), loadMyBalances()])
+  const failed = results.find((r) => r.status === 'rejected')
+  if (failed) {
+    showToast(failed.reason?.message || 'Falha ao carregar dados do painel.', 'error')
+  }
 
   if (auth.isManager.value || auth.isAdmin.value) {
     try {

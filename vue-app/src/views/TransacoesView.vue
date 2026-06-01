@@ -162,7 +162,11 @@ const { confirm } = useConfirm()
 const { categories, loadCategories } = useCategories()
 
 onMounted(async () => {
-  await Promise.allSettled([loadMine(), loadCategories()])
+  const results = await Promise.allSettled([loadMine(), loadCategories()])
+  const failed = results.find((r) => r.status === 'rejected')
+  if (failed) {
+    showToast(failed.reason?.message || 'Falha ao carregar transações.', 'error')
+  }
 })
 
 const categoryNames = computed(() => [...new Set(categories.value.map((c) => c.nome))].sort())

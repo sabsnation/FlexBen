@@ -5,6 +5,9 @@ cd "$(dirname "$0")/.."
 echo "==> npm install"
 npm install
 
+echo "==> prisma provider (postgres no Render)"
+node scripts/ensure-prisma-provider.js
+
 echo "==> prisma generate"
 npx prisma generate
 
