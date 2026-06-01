@@ -6,8 +6,17 @@
       eyebrow="Financeiro"
     >
       <template #actions>
-        <button class="btn btn-secondary" type="button" @click="exportCsv">
-          <Icon name="download" :size="14" /> Exportar CSV
+        <button class="btn btn-secondary" type="button" :disabled="exporting" @click="exportExcel">
+          <Icon :name="exporting ? 'spinner' : 'download'" :size="14" :class="exporting ? 'spin' : ''" />
+          Excel
+        </button>
+        <button class="btn btn-secondary" type="button" :disabled="exporting" @click="exportPdf">
+          <Icon name="file-text" :size="14" />
+          PDF
+        </button>
+        <button class="btn btn-ghost" type="button" :disabled="exporting" @click="exportCsv">
+          <Icon name="download" :size="14" />
+          CSV
         </button>
         <button
           class="btn btn-primary"
@@ -189,6 +198,7 @@
 import { onMounted, ref, computed } from 'vue'
 import { api } from '../api'
 import { useToast } from '../toast'
+import { exportClosingExcel, exportClosingPdf } from '../services/closingExport.js'
 import { useConfirm } from '../confirm'
 import { useAuth } from '../auth'
 import PageHeader from '../components/PageHeader.vue'
@@ -225,8 +235,14 @@ const monthOptions = [
 const yearOptions = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1]
 const { showToast } = useToast()
 const refreshing = ref(false)
+const exporting = ref(false)
 const { confirm: askConfirm } = useConfirm()
 const auth = useAuth()
+
+const fetchExportData = async () => {
+  const q = `month=${period.value.month}&year=${period.value.year}`
+  return api.get(`/finance/closing/export-data?${q}`)
+}
 
 const totalLines = computed(() => lines.value.reduce((sum, l) => sum + l.total, 0))
 const pctOfTotal = (val) => (totalLines.value > 0 ? (val / totalLines.value) * 100 : 0)
@@ -300,18 +316,56 @@ const confirmClose = async () => {
 }
 
 const exportCsv = async () => {
+  exporting.value = true
   try {
-    const csv = await api.getText('/finance/closing/export.csv')
+    const q = `month=${period.value.month}&year=${period.value.year}`
+    const csv = await api.getText(`/finance/closing/export.csv?${q}`)
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `fechamento-financeiro-${period.value.year}-${String(period.value.month).padStart(2, '0')}.csv`
+    a.download = `fechamento-flexben-${period.value.year}-${String(period.value.month).padStart(2, '0')}.csv`
     a.click()
     URL.revokeObjectURL(url)
-    showToast('CSV exportado com sucesso.', 'success')
+    showToast('CSV exportado (período selecionado).', 'success')
   } catch (err) {
     showToast(err.message, 'error')
+  } finally {
+    exporting.value = false
+  }
+}
+
+const exportExcel = async () => {
+  exporting.value = true
+  try {
+    const data = await fetchExportData()
+    if (!data.transactions?.length) {
+      showToast('Não há movimentos no período para exportar.', 'error')
+      return
+    }
+    exportClosingExcel(data, period.value)
+    showToast('Planilha Excel gerada.', 'success')
+  } catch (err) {
+    showToast(err.message, 'error')
+  } finally {
+    exporting.value = false
+  }
+}
+
+const exportPdf = async () => {
+  exporting.value = true
+  try {
+    const data = await fetchExportData()
+    if (!data.transactions?.length) {
+      showToast('Não há movimentos no período para exportar.', 'error')
+      return
+    }
+    exportClosingPdf(data, period.value)
+    showToast('PDF gerado.', 'success')
+  } catch (err) {
+    showToast(err.message, 'error')
+  } finally {
+    exporting.value = false
   }
 }
 

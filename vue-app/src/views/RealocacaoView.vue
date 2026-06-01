@@ -2,7 +2,7 @@
   <div class="container">
     <PageHeader
       title="Realocar créditos entre categorias"
-      subtitle="Mova valor disponível da categoria de origem para a destino, respeitando os tetos definidos pelo RH."
+      :subtitle="pageSubtitle"
       eyebrow="Operação flex"
     />
 
@@ -14,6 +14,22 @@
             Detalhes da realocação
           </span>
         </h3>
+
+        <div v-if="canPickUser" class="form-group">
+          <label>Colaborador <span class="req">*</span></label>
+          <select v-model="selectedUserId" :disabled="loadingUsers" @change="onUserChange">
+            <option value="">Selecione o colaborador</option>
+            <option v-for="u in eligibleUsers" :key="u.id" :value="String(u.id)">
+              {{ u.nome }} — {{ u.email }}
+            </option>
+          </select>
+          <p v-if="selectedUserLabel" class="field-help">Realocando créditos de: {{ selectedUserLabel }}</p>
+        </div>
+
+        <div v-else class="notice info mb-2">
+          <Icon class="notice-icon" name="info" :size="16" />
+          <span>Realocação na sua própria conta ({{ auth.user?.email }}).</span>
+        </div>
 
         <div class="form-row">
           <div class="form-group">
@@ -46,7 +62,7 @@
 
         <button
           class="btn btn-primary btn-block mt-3"
-          :disabled="submitDisabled || !auth.can('credit_reallocate') || loading"
+          :disabled="submitDisabled || !auth.can('credit_reallocate') || loading || balancesLoading"
           @click="submit"
         >
           <Icon v-if="loading" name="spinner" :size="14" class="spin" />
@@ -138,6 +154,7 @@ import { useTransactions } from '../transactions'
 import { useCategories } from '../categories'
 import { useAuth } from '../auth'
 import { useToast } from '../toast'
+import { creditAllocationRepository } from '../repositories/CreditAllocationApiRepository.js'
 import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
 import Icon from '../components/Icon.vue'
@@ -145,8 +162,7 @@ import Icon from '../components/Icon.vue'
 const router = useRouter()
 const {
   createReallocation,
-  loadMine,
-  loadMyBalances,
+  loadBalancesForUser,
   categoryBalance,
   balancesByCategory
 } = useTransactions()
@@ -156,16 +172,52 @@ const { showToast } = useToast()
 
 const loading = ref(false)
 const balancesLoading = ref(false)
+const loadingUsers = ref(false)
+const eligibleUsers = ref([])
+const selectedUserId = ref('')
+
+const canPickUser = computed(() =>
+  ['financeiro', 'gestor', 'administrador'].includes(auth.role.value)
+)
+
+const pageSubtitle = computed(() =>
+  canPickUser.value
+    ? 'Selecione o colaborador e mova saldo entre categorias com crédito alocado.'
+    : 'Mova valor disponível da categoria de origem para o destino.'
+)
+
+const selectedUserLabel = computed(() => {
+  if (!canPickUser.value) return auth.user.value?.nome || ''
+  const id = Number(selectedUserId.value)
+  return eligibleUsers.value.find((u) => u.id === id)?.nome || ''
+})
+
+const effectiveUserId = computed(() => {
+  if (canPickUser.value) {
+    const id = Number(selectedUserId.value)
+    return Number.isFinite(id) && id > 0 ? id : null
+  }
+  return auth.user.value?.id || null
+})
 
 const reloadBalances = async () => {
+  if (canPickUser.value && !effectiveUserId.value) {
+    return
+  }
   balancesLoading.value = true
   try {
-    await loadMyBalances()
+    await loadBalancesForUser(canPickUser.value ? effectiveUserId.value : null)
+    pickDefaultCategories()
   } catch (e) {
     showToast(e.message || 'Falha ao carregar saldos.', 'error')
   } finally {
     balancesLoading.value = false
   }
+}
+
+const onUserChange = async () => {
+  form.valor = null
+  await reloadBalances()
 }
 
 const pickDefaultCategories = () => {
@@ -180,22 +232,21 @@ const pickDefaultCategories = () => {
 }
 
 onMounted(async () => {
-  balancesLoading.value = true
   try {
     await loadCategories()
-    await loadMine()
-    await loadMyBalances()
-    pickDefaultCategories()
-    if (!balanceRows.value.some((r) => r.saldo > 0)) {
-      showToast(
-        'Nenhum saldo disponível. Peça ao RH para alocar créditos ou confira se o backend foi reiniciado.',
-        'error'
-      )
+    if (canPickUser.value) {
+      loadingUsers.value = true
+      eligibleUsers.value = await creditAllocationRepository.listEligibleUsers()
+      loadingUsers.value = false
+    } else {
+      selectedUserId.value = String(auth.user.value?.id || '')
+      await reloadBalances()
+      if (!balanceRows.value.some((r) => r.saldo > 0)) {
+        showToast('Nenhum saldo alocado. Peça ao RH para creditar suas categorias.', 'error')
+      }
     }
   } catch (e) {
     showToast(e.message || 'Falha ao carregar dados para realocação.', 'error')
-  } finally {
-    balancesLoading.value = false
   }
 })
 
@@ -241,6 +292,7 @@ const warningType = computed(() => 'danger')
 
 const submitDisabled = computed(() => {
   const v = Number(form.valor)
+  if (canPickUser.value && !effectiveUserId.value) return true
   if (!v || v <= 0) return true
   if (!form.fromCategory || !form.toCategory) return true
   if (form.fromCategory === form.toCategory) return true
@@ -259,12 +311,16 @@ const submit = async () => {
   }
   loading.value = true
   try {
-    await createReallocation({
+    const payload = {
       fromCategory: form.fromCategory,
       toCategory: form.toCategory,
       valor: Number(form.valor),
       descricao: form.descricao?.trim() || ''
-    })
+    }
+    if (canPickUser.value && effectiveUserId.value) {
+      payload.userId = effectiveUserId.value
+    }
+    await createReallocation(payload)
     showToast('Realocação registrada com sucesso.')
     form.valor = null
     form.descricao = ''

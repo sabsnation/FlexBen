@@ -83,6 +83,15 @@ export const useTransactions = () => {
     await Promise.all([loadMine(), loadMyBalances()])
   }
 
+  const loadBalancesForUser = async (userId) => {
+    if (!userId) {
+      return loadMyBalances()
+    }
+    const { balances } = await transactionRepository.getUserBalances(userId)
+    applyBalances(balances)
+    return balances
+  }
+
   const registerUsage = async (payload) => {
     await transactionRepository.registerUsage(payload)
     await Promise.all([loadMine(), loadMyBalances()])
@@ -113,6 +122,7 @@ export const useTransactions = () => {
     balancesByCategory: computed(() => state.balancesByCategory),
     loadMine,
     loadMyBalances,
+    loadBalancesForUser,
     categoryBalance,
     categoryLimit,
     createReallocation,

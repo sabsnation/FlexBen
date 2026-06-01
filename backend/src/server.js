@@ -28,6 +28,11 @@ import {
   API_JSON_BODY_LIMIT,
   validateAvatarBase64
 } from './lib/avatarLimits.js'
+import {
+  buildClosingExport,
+  buildClosingCsv,
+  parseMonthYearQuery as parseClosingMonthYear
+} from './lib/closingExport.js'
 
 const PORT = Number(process.env.PORT || 3333)
 const JWT_SECRET = process.env.JWT_SECRET || 'flexben-dev-secret'
@@ -209,6 +214,8 @@ const WORKFLOW_STATUS = Object.freeze({
 })
 
 const FINANCE_OPS_ROLES = ['financeiro', 'gestor', 'administrador']
+const REALLOC_FOR_OTHERS_ROLES = ['financeiro', 'gestor', 'administrador']
+const CREDIT_ELIGIBLE_ROLES = ['colaborador', 'gestor']
 const CEILING_APPROVER_ROLES = ['gestor', 'administrador']
 
 async function transitionCeilingProposal({ proposalId, toStatus, actorEmail, note = '' }) {
@@ -751,8 +758,20 @@ app.post(
       return res.status(400).json({ message: 'Origem e destino devem ser diferentes.' })
     }
 
-    const user = await prisma.user.findUnique({ where: { id: req.auth.id } })
-    if (!user) return res.status(401).json({ message: 'Sessão inválida.' })
+    let targetUserId = req.auth.id
+    const requestedUserId = Number(req.body?.userId)
+    if (requestedUserId && requestedUserId !== req.auth.id) {
+      if (!REALLOC_FOR_OTHERS_ROLES.includes(req.auth.role)) {
+        return res.status(403).json({ message: 'Sem permissão para realocar em nome de outro colaborador.' })
+      }
+      targetUserId = requestedUserId
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: targetUserId } })
+    if (!user) return res.status(404).json({ message: 'Colaborador não encontrado.' })
+    if (user.status !== 'Ativo' || !CREDIT_ELIGIBLE_ROLES.includes(user.role)) {
+      return res.status(400).json({ message: 'Colaborador inativo ou não elegível para realocação.' })
+    }
 
     const destCat = await prisma.category.findFirst({
       where: { nome: toCategory, status: { not: 'Inativa' } }
@@ -827,10 +846,17 @@ app.post(
 
     await logBusinessEvent({
       action: 'REALLOCATION',
-      actorEmail: user.email,
+      actorEmail: req.auth.email,
       module: 'reallocation',
       entityId: debit.id,
-      payload: { fromCategory, toCategory, valor, costCenter }
+      payload: {
+        fromCategory,
+        toCategory,
+        valor,
+        costCenter,
+        targetUserId: user.id,
+        targetEmail: user.email
+      }
     })
 
     res.status(201).json({
@@ -1681,33 +1707,27 @@ app.post(
 )
 
 app.get(
+  '/api/finance/closing/export-data',
+  authRequired,
+  roleRequired(['financeiro', 'administrador']),
+  asyncHandler(async (req, res) => {
+    const { month, year } = parseClosingMonthYear(req.query)
+    const data = await buildClosingExport(month, year)
+    res.json(data)
+  })
+)
+
+app.get(
   '/api/finance/closing/export.csv',
   authRequired,
   roleRequired(['financeiro', 'administrador']),
-  asyncHandler(async (_req, res) => {
-    const rows = await prisma.transaction.findMany({
-      where: { status: { in: [WORKFLOW_STATUS.CONCLUIDA, WORKFLOW_STATUS.APROVADO, WORKFLOW_STATUS.LIQUIDADO] } },
-      include: { user: true },
-      orderBy: { id: 'asc' }
-    })
-    const lines = [
-      'id,data,usuario_email,categoria,tipo,valor,status,descricao',
-      ...rows.map((r) =>
-        [
-          r.id,
-          r.data,
-          r.user.email,
-          r.categoria,
-          r.tipo,
-          Number(r.valor).toFixed(2),
-          r.status,
-          `"${String(r.descricao || '').replaceAll('"', '""')}"`
-        ].join(',')
-      )
-    ]
+  asyncHandler(async (req, res) => {
+    const { month, year } = parseClosingMonthYear(req.query)
+    const data = await buildClosingExport(month, year)
+    const filename = `fechamento-flexben-${year}-${String(month).padStart(2, '0')}.csv`
     res.setHeader('Content-Type', 'text/csv; charset=utf-8')
-    res.setHeader('Content-Disposition', 'attachment; filename="fechamento-financeiro.csv"')
-    res.send(lines.join('\n'))
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.send(buildClosingCsv(data))
   })
 )
 

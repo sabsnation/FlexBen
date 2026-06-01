@@ -17,6 +17,11 @@ export class TransactionApiRepository {
     return balances
   }
 
+  async getUserBalances(userId) {
+    const { balances } = await this.client.get(`/credits/users/${userId}/balances`)
+    return balances
+  }
+
   async createReallocation(payload) {
     await this.client.post('/reallocations', payload)
   }
