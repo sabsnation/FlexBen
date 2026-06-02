@@ -128,64 +128,53 @@
 
       <EmptyState v-if="!approvals.length" icon="check-circle" title="Nenhuma solicitação" message="Sem itens para os filtros aplicados." />
 
-      <div v-else class="table-wrapper" style="border: none; box-shadow: none;">
-        <table>
-          <thead>
-            <tr>
-              <th>Operação</th>
-              <th>Solicitante</th>
-              <th>Categoria</th>
-              <th>Valor</th>
-              <th>Status</th>
-              <th>Descrição</th>
-              <th>Data</th>
-              <th style="text-align: right;">Decisão</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in approvals" :key="'usage-' + item.id">
-              <td>
-                <span class="op-badge" :class="item.operationType || 'utilizacao'">
-                  {{ opTypeLabel(item.operationType) }}
-                </span>
-              </td>
-              <td>
-                <div class="requester-cell">
-                  <strong>{{ item.actorEmail || item.beneficiaryEmail }}</strong>
-                  <span v-if="item.beneficiaryEmail && item.actorEmail !== item.beneficiaryEmail" class="muted text-xs">
-                    → {{ item.beneficiaryName }}
-                  </span>
-                </div>
-              </td>
-              <td>{{ item.category }}</td>
-              <td><strong>{{ formatCurrency(item.amount) }}</strong></td>
-              <td><StatusBadge :status="item.status" /></td>
-              <td class="muted truncate" style="max-width: 200px;">{{ item.description || '—' }}</td>
-              <td class="muted">{{ item.requestedAt }}</td>
-              <td class="text-right">
-                <div class="actions" style="justify-content: flex-end; gap: 4px;">
-                  <button
-                    class="btn btn-success btn-sm"
-                    type="button"
-                    @click="openDecision(item, 'aprovado')"
-                    :disabled="!isPending(item.status) || !auth.can('approval_decide')"
-                  >
-                    <Icon name="check" :size="12" /> Aprovar
-                  </button>
-                  <button
-                    class="btn btn-danger btn-sm"
-                    type="button"
-                    @click="openDecision(item, 'reprovado')"
-                    :disabled="!isPending(item.status) || !auth.can('approval_decide')"
-                  >
-                    <Icon name="x" :size="12" /> Reprovar
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <ul v-else class="approval-list">
+        <li v-for="item in approvals" :key="'usage-' + item.id" class="approval-card">
+          <div class="approval-card__main">
+            <div class="approval-card__top">
+              <span class="op-badge" :class="item.operationType || 'utilizacao'">
+                {{ opTypeLabel(item.operationType) }}
+              </span>
+              <StatusBadge :status="item.status" />
+            </div>
+            <p class="approval-card__who">
+              <strong>{{ item.actorEmail || item.beneficiaryEmail }}</strong>
+              <span
+                v-if="item.beneficiaryEmail && item.actorEmail !== item.beneficiaryEmail"
+                class="muted"
+              >
+                → {{ item.beneficiaryName }}
+              </span>
+            </p>
+            <p class="approval-card__meta">
+              <span>{{ item.category }}</span>
+              <span class="approval-card__dot">·</span>
+              <strong>{{ formatCurrency(item.amount) }}</strong>
+              <span class="approval-card__dot">·</span>
+              <span class="muted">{{ item.requestedAt }}</span>
+            </p>
+            <p v-if="item.description" class="approval-card__desc muted">{{ item.description }}</p>
+          </div>
+          <div class="approval-card__actions">
+            <button
+              class="btn btn-success btn-sm"
+              type="button"
+              @click="openDecision(item, 'aprovado')"
+              :disabled="!isPending(item.status) || !auth.can('approval_decide')"
+            >
+              <Icon name="check" :size="12" /> Aprovar
+            </button>
+            <button
+              class="btn btn-danger btn-sm"
+              type="button"
+              @click="openDecision(item, 'reprovado')"
+              :disabled="!isPending(item.status) || !auth.can('approval_decide')"
+            >
+              <Icon name="x" :size="12" /> Reprovar
+            </button>
+          </div>
+        </li>
+      </ul>
     </div>
 
     <div v-show="activeTab === 'ceilings'" class="card">
@@ -203,51 +192,43 @@
         message="Criações e aumentos de teto aparecem aqui para decisão."
       />
 
-      <div v-else class="table-wrapper" style="border: none; box-shadow: none;">
-        <table>
-          <thead>
-            <tr>
-              <th>Tipo</th>
-              <th>Categoria</th>
-              <th>Atual</th>
-              <th>Proposto</th>
-              <th>Solicitante</th>
-              <th>Status</th>
-              <th style="text-align: right;">Decisão</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in ceilingApprovals" :key="'ceil-' + item.id">
-              <td>{{ ceilingTypeLabel(item.requestType) }}</td>
-              <td><strong>{{ item.categoryName }}</strong></td>
-              <td>{{ item.currentMonthlyCap != null ? formatCurrency(item.currentMonthlyCap) : '—' }}</td>
-              <td><strong>{{ formatCurrency(item.proposedMonthlyCap) }}</strong></td>
-              <td class="muted text-sm">{{ item.requesterEmail }}</td>
-              <td><StatusBadge :status="item.status" /></td>
-              <td class="text-right">
-                <div class="actions" style="justify-content: flex-end; gap: 4px;">
-                  <button
-                    class="btn btn-success btn-sm"
-                    type="button"
-                    :disabled="!isPending(item.status) || !auth.can('ceiling_approve')"
-                    @click="openCeilingDecision(item, 'aprovado')"
-                  >
-                    <Icon name="check" :size="12" /> Aprovar
-                  </button>
-                  <button
-                    class="btn btn-danger btn-sm"
-                    type="button"
-                    :disabled="!isPending(item.status) || !auth.can('ceiling_approve')"
-                    @click="openCeilingDecision(item, 'reprovado')"
-                  >
-                    <Icon name="x" :size="12" /> Reprovar
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <ul v-else class="approval-list">
+        <li v-for="item in ceilingApprovals" :key="'ceil-' + item.id" class="approval-card">
+          <div class="approval-card__main">
+            <div class="approval-card__top">
+              <span class="op-badge alocacao">{{ ceilingTypeLabel(item.requestType) }}</span>
+              <StatusBadge :status="item.status" />
+            </div>
+            <p class="approval-card__who">
+              <strong>{{ item.categoryName }}</strong>
+            </p>
+            <p class="approval-card__meta">
+              <span class="muted">Atual {{ item.currentMonthlyCap != null ? formatCurrency(item.currentMonthlyCap) : '—' }}</span>
+              <span class="approval-card__dot">→</span>
+              <strong>{{ formatCurrency(item.proposedMonthlyCap) }}</strong>
+            </p>
+            <p class="approval-card__desc muted">{{ item.requesterEmail }}</p>
+          </div>
+          <div class="approval-card__actions">
+            <button
+              class="btn btn-success btn-sm"
+              type="button"
+              :disabled="!isPending(item.status) || !auth.can('ceiling_approve')"
+              @click="openCeilingDecision(item, 'aprovado')"
+            >
+              <Icon name="check" :size="12" /> Aprovar
+            </button>
+            <button
+              class="btn btn-danger btn-sm"
+              type="button"
+              :disabled="!isPending(item.status) || !auth.can('ceiling_approve')"
+              @click="openCeilingDecision(item, 'reprovado')"
+            >
+              <Icon name="x" :size="12" /> Reprovar
+            </button>
+          </div>
+        </li>
+      </ul>
     </div>
 
     <Modal :open="modal.open" :title="modal.title" @close="closeDecision">
@@ -702,5 +683,100 @@ onMounted(refresh)
 .op-badge.realocacao { background: color-mix(in srgb, var(--brand-accent) 12%, transparent); color: var(--brand-accent); }
 .op-badge.alocacao   { background: color-mix(in srgb, var(--brand-warn) 14%, transparent); color: #b45309; }
 .op-badge.carga      { background: color-mix(in srgb, var(--text-muted) 12%, transparent); color: var(--text-muted); }
-.requester-cell { display: flex; flex-direction: column; gap: 2px; }
+.approval-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.approval-card {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.approval-card__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.approval-card__top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.approval-card__who {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.approval-card__who .muted {
+  font-size: 0.85rem;
+  margin-left: 4px;
+}
+
+.approval-card__meta {
+  margin: 0;
+  font-size: 0.88rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.approval-card__dot {
+  color: var(--text-subtle);
+}
+
+.approval-card__desc {
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.approval-card__actions {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+  min-width: 108px;
+}
+
+.approval-card__actions .btn {
+  width: 100%;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .approval-card {
+    flex-direction: column;
+  }
+  .approval-card__actions {
+    flex-direction: row;
+    min-width: 0;
+    width: 100%;
+  }
+  .approval-card__actions .btn {
+    flex: 1;
+  }
+}
 </style>
