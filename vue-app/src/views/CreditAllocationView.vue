@@ -275,8 +275,13 @@ const handleAllocate = async () => {
 
   submitting.value = true
   try {
-    const { created } = await allocateCredits(Number(selectedUserId.value), items)
-    showToast(`${created} crédito(s) alocado(s) com sucesso.`)
+    const result = await allocateCredits(Number(selectedUserId.value), items)
+    const { created } = result
+    if (result?.needsApproval) {
+      showToast(`${created} crédito(s) enviado(s) para aprovação do gestor.`, 'info')
+    } else {
+      showToast(`${created} crédito(s) alocado(s) com sucesso.`)
+    }
     balanceRows.forEach((r) => {
       r.valor = null
       r.descricao = ''

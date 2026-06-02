@@ -27,7 +27,7 @@ export class TransactionApiRepository {
   }
 
   async createReallocation(payload) {
-    await this.client.post('/reallocations', payload)
+    return this.client.post('/reallocations', payload)
   }
 
   async registerUsage(payload) {

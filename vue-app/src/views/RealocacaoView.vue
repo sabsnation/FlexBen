@@ -370,8 +370,12 @@ const submit = async () => {
     if (canPickUser.value && effectiveUserId.value) {
       payload.userId = effectiveUserId.value
     }
-    await createReallocation(payload)
-    showToast('Realocação registrada com sucesso.')
+    const result = await createReallocation(payload)
+    if (result?.needsApproval) {
+      showToast('Realocação enviada para aprovação do gestor. Aguarde a decisão.', 'info')
+    } else {
+      showToast('Realocação registrada com sucesso.')
+    }
     form.valor = null
     form.descricao = ''
     await reloadBalances()

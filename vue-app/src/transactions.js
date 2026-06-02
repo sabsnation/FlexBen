@@ -115,8 +115,9 @@ export const useTransactions = () => {
   const myTransactions = computed(() => state.items)
 
   const createReallocation = async (payload) => {
-    await transactionRepository.createReallocation(payload)
+    const result = await transactionRepository.createReallocation(payload)
     await Promise.all([loadMine({ scope: 'mine' }), loadMyBalances()])
+    return result
   }
 
   const loadBalancesForUser = async (userId) => {

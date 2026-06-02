@@ -42,3 +42,8 @@ services:
         sync: false
       - key: MONGODB_DB
         sync: false
+      # ── Mensageria (opcional) ──
+      # Sem RABBITMQ_URL a API usa modo inline (notificações na hora, sem fila).
+      # Com fila: crie instância em https://www.cloudamqp.com (plano free) e cole a URL AMQP.
+      - key: RABBITMQ_URL
+        sync: false

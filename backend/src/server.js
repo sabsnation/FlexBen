@@ -24,6 +24,10 @@ import {
 import { authRequired, adminRequired, roleRequired } from './middleware/auth.js'
 import { registerCreditRoutes } from './routes/credits.routes.js'
 import { syncNotificationsForUser, serializeNotification } from './lib/notifications.js'
+import { publishNotificationEvent } from './lib/notificationPublisher.js'
+import { NOTIFICATION_EVENTS } from './lib/notificationEvents.js'
+import { handleNotificationEvent } from './lib/notificationHandlers.js'
+import { createMessageBroker, isRabbitMqEnabled } from './adapters/messaging/createMessageBroker.js'
 import {
   API_JSON_BODY_LIMIT,
   validateAvatarBase64
@@ -307,6 +311,10 @@ app.get(
       audit: {
         provider: getAuditProvider(),
         ready: isAuditReady()
+      },
+      messaging: {
+        provider: isRabbitMqEnabled() ? 'rabbitmq' : 'inline',
+        queue: 'flexben.notifications'
       },
       features: [
         'auth',
@@ -801,6 +809,13 @@ app.post(
     const now = new Date().toLocaleDateString('pt-BR')
     const extra = descricao ? ` — ${descricao}` : ''
 
+    // Operações do financeiro sempre exigem aprovação do gestor
+    const needsManagerApproval = req.auth.role === 'financeiro'
+    const txStatus = needsManagerApproval ? WORKFLOW_STATUS.EM_ANALISE : WORKFLOW_STATUS.CONCLUIDA
+    const wfNote = needsManagerApproval
+      ? 'Realocação criada pelo financeiro — aguardando aprovação do gestor'
+      : null
+
     const { debit, credit } = await prisma.$transaction(async (db) => {
       const debitRow = await db.transaction.create({
         data: {
@@ -809,7 +824,7 @@ app.post(
           tipo: 'Saída',
           categoria: fromCategory,
           valor,
-          status: WORKFLOW_STATUS.CONCLUIDA,
+          status: txStatus,
           descricao: `Realocação para ${toCategory}${extra}`
         },
         include: { user: true }
@@ -821,7 +836,7 @@ app.post(
           tipo: 'Entrada',
           categoria: toCategory,
           valor,
-          status: WORKFLOW_STATUS.CONCLUIDA,
+          status: txStatus,
           descricao: `Realocação de ${fromCategory}${extra}`
         },
         include: { user: true }
@@ -831,17 +846,17 @@ app.post(
           {
             transactionId: debitRow.id,
             fromStatus: null,
-            toStatus: WORKFLOW_STATUS.CONCLUIDA,
-            actorEmail: user.email,
-            note: 'Realocação debitada',
+            toStatus: txStatus,
+            actorEmail: req.auth.email,
+            note: wfNote || 'Realocação debitada',
             createdAt: new Date().toISOString()
           },
           {
             transactionId: creditRow.id,
             fromStatus: null,
-            toStatus: WORKFLOW_STATUS.CONCLUIDA,
-            actorEmail: user.email,
-            note: 'Realocação creditada',
+            toStatus: txStatus,
+            actorEmail: req.auth.email,
+            note: wfNote || 'Realocação creditada',
             createdAt: new Date().toISOString()
           }
         ]
@@ -864,9 +879,25 @@ app.post(
       }
     })
 
+    if (needsManagerApproval) {
+      await publishNotificationEvent({
+        type: NOTIFICATION_EVENTS.APPROVAL_SUBMITTED,
+        payload: {
+          transactionId: debit.id,
+          actorEmail: req.auth.email,
+          beneficiaryName: user.nome,
+          operationType: 'realocacao',
+          category: `${fromCategory} → ${toCategory}`,
+          amount: valor,
+          description: descricao || `Realocação para ${toCategory}`
+        }
+      })
+    }
+
     res.status(201).json({
       debit: serializeTransaction(debit),
-      credit: serializeTransaction(credit)
+      credit: serializeTransaction(credit),
+      needsApproval: needsManagerApproval
     })
   })
 )
@@ -952,6 +983,18 @@ app.post(
         costCenter
       }
     })
+
+    if (row.status === WORKFLOW_STATUS.EM_ANALISE) {
+      await publishNotificationEvent({
+        type: NOTIFICATION_EVENTS.USAGE_SUBMITTED,
+        payload: {
+          transactionId: row.id,
+          userId: user.id,
+          category: categoria,
+          amount: valor
+        }
+      })
+    }
 
     res.status(201).json({ transaction: serializeTransaction(row) })
   })
@@ -1127,9 +1170,11 @@ app.post(
       proposedMonthlyCap
     )
 
+    // Financeiro nunca auto-aplica — qualquer proposta sua exige aprovação do gestor
     const canAutoApplyDecrease =
       requestType === 'decrease' &&
       CEILING_APPROVER_ROLES.includes(req.auth.role) &&
+      req.auth.role !== 'financeiro' &&
       !needsApproval
 
     const initialStatus = canAutoApplyDecrease
@@ -1184,6 +1229,19 @@ app.post(
       }
     })
 
+    if (initialStatus === WORKFLOW_STATUS.EM_ANALISE) {
+      await publishNotificationEvent({
+        type: NOTIFICATION_EVENTS.CEILING_SUBMITTED,
+        payload: {
+          proposalId: row.id,
+          requesterEmail: req.auth.email,
+          categoryName: resolvedName,
+          requestType,
+          proposedMonthlyCap
+        }
+      })
+    }
+
     res.status(201).json({ proposal: serializeCeilingProposal(row) })
   })
 )
@@ -1223,6 +1281,15 @@ app.post(
         entityId: id,
         payload: { justification }
       })
+      await publishNotificationEvent({
+        type: NOTIFICATION_EVENTS.CEILING_DECIDED,
+        payload: {
+          proposalId: id,
+          requesterEmail: proposal.requesterEmail,
+          decision: 'reprovado',
+          categoryName: proposal.categoryName
+        }
+      })
       return res.json({ proposal: serializeCeilingProposal(updated) })
     }
 
@@ -1240,6 +1307,16 @@ app.post(
       module: 'ceiling_proposals',
       entityId: id,
       payload: { justification, categoryName: proposal.categoryName }
+    })
+
+    await publishNotificationEvent({
+      type: NOTIFICATION_EVENTS.CEILING_DECIDED,
+      payload: {
+        proposalId: id,
+        requesterEmail: proposal.requesterEmail,
+        decision: 'aprovado',
+        categoryName: proposal.categoryName
+      }
     })
 
     res.json({ proposal: serializeCeilingProposal(updated) })
@@ -1285,7 +1362,7 @@ app.get(
     const selected = mapStatus[rawStatus]
     const rows = await prisma.transaction.findMany({
       where: selected
-        ? { status: selected, tipo: 'Saída' }
+        ? { status: selected }
         : {
             status: {
               in: [
@@ -1296,22 +1373,45 @@ app.get(
                 WORKFLOW_STATUS.LIQUIDADO,
                 WORKFLOW_STATUS.CONCLUIDA
               ]
-            },
-            tipo: 'Saída'
+            }
           },
-      include: { user: true },
+      include: {
+        user: true,
+        events: { where: { fromStatus: null }, orderBy: { id: 'asc' }, take: 1 }
+      },
       orderBy: { id: 'desc' }
     })
-    const approvals = rows.map((row) => ({
-      id: row.id,
-      requesterName: row.user.nome,
-      requesterEmail: row.user.email,
-      category: row.categoria,
-      amount: Number(row.valor),
-      status: row.status.toLowerCase().replaceAll(' ', '_'),
-      requestedAt: row.data,
-      description: row.descricao || ''
-    }))
+
+    function resolveOperationType(row) {
+      const d = row.descricao || ''
+      if (d.startsWith('Realocação')) return 'realocacao'
+      if (d.startsWith('Alocação manual') || d.startsWith('Crédito')) return 'alocacao'
+      if (d.startsWith('Carga mensal')) return 'carga'
+      return 'utilizacao'
+    }
+
+    // O par Entrada de uma realocação é auto-decidido; só mostrar o Saída ao gestor.
+    const filtered = rows.filter(
+      (row) => !(row.tipo === 'Entrada' && (row.descricao || '').startsWith('Realocação de'))
+    )
+
+    const approvals = filtered.map((row) => {
+      const initialEvent = row.events[0]
+      const actorEmail = initialEvent?.actorEmail || row.user.email
+      return {
+        id: row.id,
+        beneficiaryName: row.user.nome,
+        beneficiaryEmail: row.user.email,
+        actorEmail,
+        category: row.categoria,
+        amount: Number(row.valor),
+        tipo: row.tipo,
+        operationType: resolveOperationType(row),
+        status: row.status.toLowerCase().replaceAll(' ', '_'),
+        requestedAt: row.data,
+        description: row.descricao || ''
+      }
+    })
     res.json({ approvals })
   })
 )
@@ -1323,7 +1423,17 @@ app.get(
   asyncHandler(async (req, res) => {
     const thresholdDays = Math.max(1, Number(req.query.thresholdDays || 7))
     const rows = await prisma.transaction.findMany({
-      where: { tipo: 'Saída' },
+      where: {
+        status: {
+          in: [
+            WORKFLOW_STATUS.EM_ANALISE,
+            WORKFLOW_STATUS.PENDENTE,
+            WORKFLOW_STATUS.APROVADO,
+            WORKFLOW_STATUS.REPROVADO,
+            WORKFLOW_STATUS.LIQUIDADO
+          ]
+        }
+      },
       include: { user: true },
       orderBy: { id: 'desc' }
     })
@@ -1414,19 +1524,48 @@ app.post(
     }
 
     const status = decision === 'aprovado' ? WORKFLOW_STATUS.APROVADO : WORKFLOW_STATUS.REPROVADO
-    await transitionStatus({
-      transactionId: id,
-      toStatus: status,
-      actorEmail: req.auth.email,
-      note: `Decisão gerencial: ${decision}${justification ? ` (${justification})` : ''}`
-    })
+    const decisionNote = `Decisão gerencial: ${decision}${justification ? ` (${justification})` : ''}`
+
+    await transitionStatus({ transactionId: id, toStatus: status, actorEmail: req.auth.email, note: decisionNote })
+
+    const descSuffix = `— decisão gestor: ${decision}${justification ? ` (${justification})` : ''}`
     const updated = await prisma.transaction.update({
       where: { id },
-      data: {
-        descricao: `${tx.descricao || 'Solicitação'} — decisão gestor: ${decision}${justification ? ` (${justification})` : ''}`
-      },
+      data: { descricao: `${tx.descricao || 'Solicitação'} ${descSuffix}` },
       include: { user: true }
     })
+
+    // Se for parte de um par de realocação, decide o par automaticamente
+    if (tx.descricao?.includes('Realocação')) {
+      const paired = await prisma.transaction.findFirst({
+        where: {
+          id: { not: id },
+          userId: tx.userId,
+          data: tx.data,
+          valor: tx.valor,
+          status: { in: [WORKFLOW_STATUS.EM_ANALISE, WORKFLOW_STATUS.PENDENTE] },
+          descricao: { contains: 'Realocação' }
+        }
+      })
+      if (paired) {
+        await transitionStatus({
+          transactionId: paired.id,
+          toStatus: status,
+          actorEmail: req.auth.email,
+          note: `Par de realocação — ${decisionNote}`
+        })
+        await prisma.transaction.update({
+          where: { id: paired.id },
+          data: { descricao: `${paired.descricao || ''} ${descSuffix}` }
+        })
+      }
+    }
+
+    const initialEvent = await prisma.workflowEvent.findFirst({
+      where: { transactionId: id, fromStatus: null },
+      orderBy: { id: 'asc' }
+    })
+
     await logBusinessEvent({
       action: 'MANAGER_DECISION',
       actorEmail: req.auth.email,
@@ -1434,6 +1573,18 @@ app.post(
       entityId: id,
       payload: { transactionId: id, decision }
     })
+
+    await publishNotificationEvent({
+      type: NOTIFICATION_EVENTS.APPROVAL_DECIDED,
+      payload: {
+        transactionId: id,
+        decision,
+        actorEmail: initialEvent?.actorEmail || tx.user.email,
+        beneficiaryUserId: tx.userId,
+        description: tx.descricao || ''
+      }
+    })
+
     res.json({ approval: serializeTransaction(updated) })
   })
 )
@@ -1769,6 +1920,9 @@ app.use((err, _req, res, _next) => {
   }
   res.status(500).json({ message: 'Erro interno no servidor.' })
 })
+
+const broker = createMessageBroker()
+await broker.startConsumer(handleNotificationEvent)
 
 const server = app.listen(PORT, () => {
   console.log(`API FlexBen na porta ${PORT} (${NODE_ENV})`)

@@ -19,7 +19,8 @@
         :class="{ active: activeTab === 'usage' }"
         @click="activeTab = 'usage'"
       >
-        Utilização de créditos
+        Operações financeiras
+        <span v-if="pendingApprovalsCount" class="tab-badge">{{ pendingApprovalsCount }}</span>
       </button>
       <button
         type="button"
@@ -121,7 +122,7 @@
       <h3 class="card-title">
         <span class="title-with-icon">
           <span class="icon-bg sm"><Icon name="inbox" :size="14" /></span>
-          Utilização — solicitações
+          Operações financeiras — solicitações
         </span>
       </h3>
 
@@ -131,22 +132,35 @@
         <table>
           <thead>
             <tr>
+              <th>Operação</th>
               <th>Solicitante</th>
               <th>Categoria</th>
               <th>Valor</th>
               <th>Status</th>
               <th>Descrição</th>
-              <th>Solicitado</th>
+              <th>Data</th>
               <th style="text-align: right;">Decisão</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="item in approvals" :key="'usage-' + item.id">
-              <td><strong>{{ item.requesterName }}</strong></td>
+              <td>
+                <span class="op-badge" :class="item.operationType || 'utilizacao'">
+                  {{ opTypeLabel(item.operationType) }}
+                </span>
+              </td>
+              <td>
+                <div class="requester-cell">
+                  <strong>{{ item.actorEmail || item.beneficiaryEmail }}</strong>
+                  <span v-if="item.beneficiaryEmail && item.actorEmail !== item.beneficiaryEmail" class="muted text-xs">
+                    → {{ item.beneficiaryName }}
+                  </span>
+                </div>
+              </td>
               <td>{{ item.category }}</td>
               <td><strong>{{ formatCurrency(item.amount) }}</strong></td>
               <td><StatusBadge :status="item.status" /></td>
-              <td class="muted truncate" style="max-width: 240px;">{{ item.description || '—' }}</td>
+              <td class="muted truncate" style="max-width: 200px;">{{ item.description || '—' }}</td>
               <td class="muted">{{ item.requestedAt }}</td>
               <td class="text-right">
                 <div class="actions" style="justify-content: flex-end; gap: 4px;">
@@ -240,10 +254,36 @@
       <div v-if="modal.item">
         <div class="info-grid mb-2">
           <template v-if="modal.kind === 'usage'">
-            <div><span class="muted">Solicitante</span><strong>{{ modal.item.requesterName }}</strong></div>
-            <div><span class="muted">Categoria</span><strong>{{ modal.item.category }}</strong></div>
-            <div><span class="muted">Valor</span><strong>{{ formatCurrency(modal.item.amount) }}</strong></div>
-            <div><span class="muted">Solicitado em</span><strong>{{ modal.item.requestedAt }}</strong></div>
+            <div>
+              <span class="muted">Operação</span>
+              <span class="op-badge" :class="modal.item.operationType || 'utilizacao'">
+                {{ opTypeLabel(modal.item.operationType) }}
+              </span>
+            </div>
+            <div>
+              <span class="muted">Submetido por</span>
+              <strong>{{ modal.item.actorEmail }}</strong>
+            </div>
+            <div v-if="modal.item.actorEmail !== modal.item.beneficiaryEmail">
+              <span class="muted">Beneficiário</span>
+              <strong>{{ modal.item.beneficiaryName }} ({{ modal.item.beneficiaryEmail }})</strong>
+            </div>
+            <div>
+              <span class="muted">Categoria</span>
+              <strong>{{ modal.item.category }}</strong>
+            </div>
+            <div>
+              <span class="muted">Valor</span>
+              <strong>{{ formatCurrency(modal.item.amount) }}</strong>
+            </div>
+            <div>
+              <span class="muted">Data</span>
+              <strong>{{ modal.item.requestedAt }}</strong>
+            </div>
+            <div v-if="modal.item.description" style="grid-column: 1 / -1;">
+              <span class="muted">Descrição</span>
+              <strong>{{ modal.item.description }}</strong>
+            </div>
           </template>
           <template v-else>
             <div><span class="muted">Tipo</span><strong>{{ ceilingTypeLabel(modal.item.requestType) }}</strong></div>
@@ -355,8 +395,22 @@ const ceilingTypeLabel = (t) => {
   return map[t] || t
 }
 
+const opTypeLabel = (t) => {
+  const map = {
+    utilizacao: 'Utilização',
+    realocacao: 'Realocação',
+    alocacao: 'Alocação',
+    carga: 'Carga mensal'
+  }
+  return map[t] || 'Utilização'
+}
+
 const pendingCeilingsCount = computed(() =>
   ceilingApprovals.value.filter((p) => isPending(p.status)).length
+)
+
+const pendingApprovalsCount = computed(() =>
+  allApprovals.value.filter((p) => isPending(p.status)).length
 )
 
 const loadApprovals = async () => {
@@ -393,8 +447,9 @@ const filteredApprovals = computed(() => {
   if (!q) return approvals.value
   return approvals.value.filter((item) => {
     const hay = [
-      item.requesterName,
-      item.requesterEmail,
+      item.actorEmail,
+      item.beneficiaryName,
+      item.beneficiaryEmail,
       item.category,
       item.description
     ]
@@ -635,4 +690,17 @@ onMounted(refresh)
   color: var(--text-subtle);
   pointer-events: none;
 }
+.op-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.op-badge.utilizacao { background: color-mix(in srgb, var(--brand-primary) 12%, transparent); color: var(--brand-primary); }
+.op-badge.realocacao { background: color-mix(in srgb, var(--brand-accent) 12%, transparent); color: var(--brand-accent); }
+.op-badge.alocacao   { background: color-mix(in srgb, var(--brand-warn) 14%, transparent); color: #b45309; }
+.op-badge.carga      { background: color-mix(in srgb, var(--text-muted) 12%, transparent); color: var(--text-muted); }
+.requester-cell { display: flex; flex-direction: column; gap: 2px; }
 </style>

@@ -1,5 +1,7 @@
 import { prisma } from '../lib/prisma.js'
 import { logBusinessEvent } from '../lib/businessAudit.js'
+import { publishNotificationEvent } from '../lib/notificationPublisher.js'
+import { NOTIFICATION_EVENTS } from '../lib/notificationEvents.js'
 
 const CREDIT_ELIGIBLE_ROLES = ['colaborador', 'gestor']
 
@@ -112,6 +114,10 @@ export function registerCreditRoutes(app, {
         }
         if (!valor || valor <= 0) continue
 
+        // Alocações feitas pelo financeiro exigem aprovação do gestor
+        const needsApproval = req.auth.role === 'financeiro'
+        const txStatus = needsApproval ? WORKFLOW_STATUS.EM_ANALISE : WORKFLOW_STATUS.CONCLUIDA
+
         const row = await prisma.transaction.create({
           data: {
             userId,
@@ -119,7 +125,7 @@ export function registerCreditRoutes(app, {
             tipo: 'Entrada',
             categoria,
             valor,
-            status: WORKFLOW_STATUS.CONCLUIDA,
+            status: txStatus,
             descricao
           },
           include: { user: true }
@@ -128,9 +134,11 @@ export function registerCreditRoutes(app, {
           data: {
             transactionId: row.id,
             fromStatus: null,
-            toStatus: WORKFLOW_STATUS.CONCLUIDA,
+            toStatus: txStatus,
             actorEmail: req.auth.email,
-            note: 'Crédito alocado por RH/Financeiro',
+            note: needsApproval
+              ? 'Alocação criada pelo financeiro — aguardando aprovação do gestor'
+              : 'Crédito alocado por RH/Financeiro',
             createdAt: new Date().toISOString()
           }
         })
@@ -149,7 +157,28 @@ export function registerCreditRoutes(app, {
         payload: { entriesCreated: created.length, targetEmail: target.email }
       })
 
-      res.status(201).json({ created: created.length, transactions: created })
+      if (req.auth.role === 'financeiro') {
+        for (const tx of created) {
+          await publishNotificationEvent({
+            type: NOTIFICATION_EVENTS.APPROVAL_SUBMITTED,
+            payload: {
+              transactionId: tx.id,
+              actorEmail: req.auth.email,
+              beneficiaryName: target.nome,
+              operationType: 'alocacao',
+              category: tx.categoria,
+              amount: tx.valor,
+              description: tx.descricao || `Alocação em ${tx.categoria}`
+            }
+          })
+        }
+      }
+
+      res.status(201).json({
+        created: created.length,
+        transactions: created,
+        needsApproval: req.auth.role === 'financeiro'
+      })
     })
   )
 }

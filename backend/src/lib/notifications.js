@@ -55,16 +55,22 @@ export async function syncNotificationsForUser(user) {
   const role = user.role
 
   if (['gestor', 'administrador'].includes(role)) {
+    // Conta utilização (Saída) + realocações/alocações do financeiro (excluindo o par Entrada auto-decidido)
     const pendingApprovals = await prisma.transaction.count({
       where: {
-        tipo: 'Saída',
-        status: { in: WORKFLOW_PENDING }
+        status: { in: WORKFLOW_PENDING },
+        NOT: {
+          AND: [
+            { tipo: 'Entrada' },
+            { descricao: { startsWith: 'Realocação de' } }
+          ]
+        }
       }
     })
     if (pendingApprovals > 0) {
       await upsertNotification(userId, 'pending-approvals', {
         title: 'Aprovações pendentes',
-        message: `${pendingApprovals} solicitação(ões) aguardam decisão gerencial.`,
+        message: `${pendingApprovals} operação(ões) do financeiro aguardam decisão gerencial.`,
         link: '/gestor/aprovacoes',
         type: 'warning'
       })
@@ -87,16 +93,37 @@ export async function syncNotificationsForUser(user) {
     }
   }
 
-  if (['financeiro', 'gestor', 'administrador'].includes(role)) {
+  if (role === 'financeiro') {
     const pendingCeilingsFinance = await prisma.benefitCeilingProposal.count({
-      where: { status: { in: WORKFLOW_PENDING } }
+      where: { requesterEmail: user.email, status: { in: WORKFLOW_PENDING } }
     })
-    if (pendingCeilingsFinance > 0 && role === 'financeiro') {
-      await upsertNotification(userId, 'ceilings-submitted', {
-        title: 'Propostas em análise',
-        message: 'Suas solicitações de teto estão com gestor/RH.',
-        type: 'info'
+    // Conta operações submetidas PELO financeiro (via actorEmail no evento inicial)
+    // que ainda estão pendentes, excluindo o par Entrada auto-decidido de realocações
+    const pendingFinanceOps = await prisma.workflowEvent.count({
+      where: {
+        actorEmail: user.email,
+        fromStatus: null,
+        transaction: {
+          status: { in: WORKFLOW_PENDING },
+          NOT: {
+            AND: [
+              { tipo: 'Entrada' },
+              { descricao: { startsWith: 'Realocação de' } }
+            ]
+          }
+        }
+      }
+    })
+    const total = pendingCeilingsFinance + pendingFinanceOps
+    if (total > 0) {
+      await upsertNotification(userId, 'finance-ops-pending', {
+        title: 'Operações aguardando aprovação',
+        message: `${total} operação(ões) enviada(s) aguardam decisão do gestor.`,
+        link: '/transacoes',
+        type: 'warning'
       })
+    } else {
+      await removeDedupeNotification(userId, 'finance-ops-pending')
     }
   }
 

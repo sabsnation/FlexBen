@@ -85,8 +85,55 @@ Primeiro crie um **PostgreSQL** em **New → PostgreSQL** (plano free) e copie a
 | `FIREBASE_SERVICE_ACCOUNT` | JSON da service account em 1 linha | só se Firestore |
 | `MONGODB_URI` | string `mongodb+srv://...` | só se MongoDB |
 | `MONGODB_DB` | nome do DB | só se MongoDB |
+| `RABBITMQ_URL` | URL AMQP do broker (ex.: CloudAMQP) | não — ver §2.1 |
 
 > No plano **free**, o serviço “dorme” após ~15 min sem uso. A primeira requisição pode levar ~30–60 s.
+
+### 2.1 Notificações e RabbitMQ em produção
+
+O Render **não** hospeda RabbitMQ no mesmo blueprint do Postgres. Você tem duas opções:
+
+#### Opção A — Sem RabbitMQ (recomendado no free tier)
+
+**Não defina** `RABBITMQ_URL` no serviço `flexben-api`.
+
+A API usa **modo inline**: ao criar realocação, alocação ou teto, o evento é processado na hora e a notificação vai para o banco. Funciona igual em local e no Render, sem custo extra.
+
+No log do deploy deve aparecer: `[messaging] modo inline`.
+
+#### Opção B — Com RabbitMQ (mensageria real em produção)
+
+Use um broker **externo** e aponte a API com `RABBITMQ_URL`.
+
+**Passo a passo (CloudAMQP — plano free “Little Lemur”):**
+
+1. Acesse [cloudamqp.com](https://www.cloudamqp.com) e crie uma conta.
+2. **Create New Instance** → região próxima de Oregon (mesma do Render, se possível).
+3. Plano **Little Lemur** (grátis).
+4. Na instância, abra **Details** e copie a URL **AMQP** (formato `amqps://user:pass@host/vhost`).
+5. No Render → serviço **flexben-api** → **Environment** → **Add Environment Variable**:
+   - Nome: `RABBITMQ_URL`
+   - Valor: a URL AMQP copiada (use `amqps://` se o painel oferecer TLS).
+6. **Save Changes** → o Render faz redeploy automático.
+7. Nos **Logs** do `flexben-api`, confirme: `[messaging] RabbitMQ habilitado` e `[rabbitmq] consumindo fila "flexben.notifications"`.
+
+**Desenvolvimento local com Docker:**
+
+```bash
+docker compose up -d rabbitmq
+```
+
+Em `backend/.env`:
+
+```env
+RABBITMQ_URL="amqp://flexben:flexben@localhost:5672"
+```
+
+Painel de gestão local: [http://localhost:15672](http://localhost:15672) (usuário `flexben`, senha `flexben`).
+
+**Outros provedores compatíveis:** Amazon MQ, RabbitMQ em VPS, Railway (template RabbitMQ). Qualquer um que entregue URL `amqp://` ou `amqps://` funciona.
+
+> O consumer roda **no mesmo processo** da API (`flexben-api`). Não é necessário um segundo serviço no Render — só a variável `RABBITMQ_URL`.
 
 ---
 
