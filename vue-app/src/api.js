@@ -160,6 +160,10 @@ async function request(path, options = {}) {
       if (res.status === 304) {
         throw new Error('Resposta em cache inválida. Atualize a página.')
       }
+      // 204 No Content (ex.: DELETE) — sucesso sem JSON
+      if (res.status === 204 || (data === null && !text)) {
+        return null
+      }
       if (data === null && text) throw errorFromResponse(res, data, text)
       if (data === null) {
         throw new Error('Resposta vazia da API. Tente novamente.')
