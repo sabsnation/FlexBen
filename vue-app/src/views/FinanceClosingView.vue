@@ -343,7 +343,7 @@ const exportExcel = async () => {
       showToast('Não há movimentos no período para exportar.', 'error')
       return
     }
-    exportClosingExcel(data, period.value)
+    await exportClosingExcel(data, period.value)
     showToast('Planilha Excel gerada.', 'success')
   } catch (err) {
     showToast(err.message, 'error')
@@ -360,7 +360,7 @@ const exportPdf = async () => {
       showToast('Não há movimentos no período para exportar.', 'error')
       return
     }
-    exportClosingPdf(data, period.value)
+    await exportClosingPdf(data, period.value)
     showToast('PDF gerado.', 'success')
   } catch (err) {
     showToast(err.message, 'error')

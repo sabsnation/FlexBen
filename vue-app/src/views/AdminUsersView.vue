@@ -6,13 +6,17 @@
       eyebrow="Administração"
     >
       <template #actions>
+        <button class="btn btn-secondary" type="button" @click="exportUsersCsv">
+          <Icon name="download" :size="14" /> Exportar CSV
+        </button>
         <button class="btn btn-primary" @click="openInvite">
           <Icon name="plus" :size="14" /> Convidar usuário
         </button>
       </template>
     </PageHeader>
 
-    <div class="grid cols-4 mb-3">
+    <KpiSkeleton v-if="pageLoading" />
+    <div v-else class="grid cols-4 mb-3">
       <KpiCard label="Total de usuários" :value="total" tone="info" icon="users" />
       <KpiCard label="Ativos" :value="counts.active" tone="success" icon="check-circle" />
       <KpiCard label="Inativos" :value="counts.inactive" tone="warning" icon="x-circle" />
@@ -55,7 +59,9 @@
       </div>
     </div>
 
-    <div v-if="filtered.length === 0" class="card">
+    <TableSkeleton v-if="pageLoading" :rows="7" />
+
+    <div v-else-if="filtered.length === 0" class="card">
       <EmptyState icon="users" title="Nenhum usuário encontrado" message="Ajuste os filtros ou convide um novo usuário." />
     </div>
 
@@ -82,7 +88,11 @@
             </td>
             <td class="muted">{{ u.email }}</td>
             <td><span class="badge" :class="rolePill(u.role)">{{ roleLabel(u.role) }}</span></td>
-            <td><span class="badge badge-muted">{{ authLabel(u.authProvider) }}</span></td>
+            <td>
+              <span class="badge" :class="u.authProvider === 'google' ? 'badge-google' : 'badge-muted'">
+                {{ authLabel(u.authProvider) }}
+              </span>
+            </td>
             <td><StatusBadge :status="u.status" /></td>
             <td class="muted">{{ u.data }}</td>
             <td class="text-right">
@@ -162,14 +172,18 @@
 </template>
 
 <script setup>
-import { reactive, computed, onMounted } from 'vue'
+import { reactive, computed, onMounted, ref } from 'vue'
 import { useUsers } from '../users'
+import { useRouteQuerySync } from '../composables/useRouteQuerySync.js'
+import { downloadCsv } from '../services/listUtils.js'
 import { useToast } from '../toast'
 import { useConfirm } from '../confirm'
 import PageHeader from '../components/PageHeader.vue'
 import KpiCard from '../components/KpiCard.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import EmptyState from '../components/EmptyState.vue'
+import KpiSkeleton from '../components/KpiSkeleton.vue'
+import TableSkeleton from '../components/TableSkeleton.vue'
 import Modal from '../components/Modal.vue'
 import Icon from '../components/Icon.vue'
 
@@ -178,14 +192,23 @@ const { showToast } = useToast()
 const { confirm } = useConfirm()
 
 onMounted(async () => {
+  pageLoading.value = true
   try {
     await loadUsers()
   } catch (err) {
     showToast(err.message, 'error')
+  } finally {
+    pageLoading.value = false
   }
 })
 
+const pageLoading = ref(true)
 const filters = reactive({ search: '', role: '', status: '' })
+useRouteQuerySync([
+  { query: 'q', get: () => filters.search },
+  { query: 'role', get: () => filters.role },
+  { query: 'status', get: () => filters.status }
+])
 const form = reactive({ nome: '', email: '', role: 'colaborador', senha: '', authProvider: 'password' })
 const modal = reactive({ open: false, error: '', loading: false })
 
@@ -292,6 +315,21 @@ const handleToggleStatus = async (id) => {
   }
 }
 
+const exportUsersCsv = () => {
+  const rows = filtered.value
+  if (!rows.length) {
+    showToast('Não há usuários para exportar.', 'info')
+    return
+  }
+  downloadCsv(
+    `usuarios-${new Date().toISOString().slice(0, 10)}.csv`,
+    ['Nome', 'E-mail', 'Perfil', 'Login', 'Status', 'Cadastro'],
+    rows,
+    (u) => [u.nome, u.email, roleLabel(u.role), authLabel(u.authProvider), u.status, u.data]
+  )
+  showToast(`CSV gerado (${rows.length} registros).`, 'success')
+}
+
 const handleDelete = async (id, nome) => {
   const ok = await confirm({
     title: 'Excluir usuário',
@@ -349,5 +387,10 @@ const handleDelete = async (id, nome) => {
   border-color: var(--brand-primary);
   background: var(--brand-primary-softer);
   color: var(--brand-primary-dark);
+}
+.badge-google {
+  background: color-mix(in srgb, #ea4335 12%, var(--surface));
+  color: #c5221f;
+  border: 1px solid color-mix(in srgb, #ea4335 25%, transparent);
 }
 </style>

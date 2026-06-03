@@ -11,7 +11,8 @@
       </template>
     </PageHeader>
 
-    <div class="grid cols-4 mb-3">
+    <KpiSkeleton v-if="pageLoading" />
+    <div v-else class="grid cols-4 mb-3">
       <KpiCard label="Total registrado" :value="filteredTransactions.length" tone="info" icon="list" :hint="`de ${transactions.length} no total`" />
       <KpiCard label="Total créditos" :value="totalIn" format="currency" tone="success" icon="arrow-down" />
       <KpiCard label="Total saídas" :value="totalOut" format="currency" tone="warning" icon="arrow-up" />
@@ -61,10 +62,20 @@
             <option value="Concluída">Concluída</option>
           </select>
         </div>
+        <div class="form-group">
+          <label>Data inicial</label>
+          <input v-model="filters.dateFrom" type="date" />
+        </div>
+        <div class="form-group">
+          <label>Data final</label>
+          <input v-model="filters.dateTo" type="date" />
+        </div>
       </div>
     </div>
 
-    <div v-if="filteredTransactions.length === 0" class="card">
+    <TableSkeleton v-if="pageLoading" :rows="8" />
+
+    <div v-else-if="displayedTransactions.length === 0" class="card">
       <EmptyState
         icon="inbox"
         title="Nenhuma transação encontrada"
@@ -76,17 +87,25 @@
       <table>
         <thead>
           <tr>
-            <th>Data</th>
+            <th class="th-sortable" @click="toggleSort('data')">
+              Data <Icon :name="sortIcon('data')" :size="12" class="sort-icon" />
+            </th>
             <th>Descrição</th>
-            <th>Tipo</th>
+            <th class="th-sortable" @click="toggleSort('tipo')">
+              Tipo <Icon :name="sortIcon('tipo')" :size="12" class="sort-icon" />
+            </th>
             <th>Categoria</th>
-            <th>Valor</th>
-            <th>Status</th>
+            <th class="th-sortable" @click="toggleSort('valor')">
+              Valor <Icon :name="sortIcon('valor')" :size="12" class="sort-icon" />
+            </th>
+            <th class="th-sortable" @click="toggleSort('status')">
+              Status <Icon :name="sortIcon('status')" :size="12" class="sort-icon" />
+            </th>
             <th style="width: 1%;">Ações</th>
           </tr>
         </thead>
         <tbody>
-          <template v-for="item in filteredTransactions" :key="item.id">
+          <template v-for="item in displayedTransactions" :key="item.id">
             <tr>
               <td class="muted nowrap">{{ item.data }}</td>
               <td><strong>{{ item.descricao || '—' }}</strong></td>
@@ -145,8 +164,10 @@
 </template>
 
 <script setup>
-import { reactive, computed, onMounted } from 'vue'
+import { reactive, computed, onMounted, ref } from 'vue'
 import { useTransactions } from '../transactions'
+import { useRouteQuerySync } from '../composables/useRouteQuerySync.js'
+import { inDateRange, sortRows, downloadCsv } from '../services/listUtils.js'
 import { useCategories } from '../categories'
 import { useToast } from '../toast'
 import { useConfirm } from '../confirm'
@@ -154,27 +175,55 @@ import PageHeader from '../components/PageHeader.vue'
 import KpiCard from '../components/KpiCard.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import EmptyState from '../components/EmptyState.vue'
+import KpiSkeleton from '../components/KpiSkeleton.vue'
+import TableSkeleton from '../components/TableSkeleton.vue'
 import Icon from '../components/Icon.vue'
 
+const pageLoading = ref(true)
 const { transactions, deleteTransaction, loadMine, getWorkflowHistory } = useTransactions()
 const { showToast } = useToast()
 const { confirm } = useConfirm()
 const { categories, loadCategories } = useCategories()
 
 onMounted(async () => {
-  const results = await Promise.allSettled([loadMine(), loadCategories()])
-  const failed = results.find((r) => r.status === 'rejected')
-  if (failed) {
-    showToast(failed.reason?.message || 'Falha ao carregar transações.', 'error')
+  pageLoading.value = true
+  try {
+    const results = await Promise.allSettled([loadMine(), loadCategories()])
+    const failed = results.find((r) => r.status === 'rejected')
+    if (failed) {
+      showToast(failed.reason?.message || 'Falha ao carregar transações.', 'error')
+    }
+  } finally {
+    pageLoading.value = false
   }
 })
 
 const categoryNames = computed(() => [...new Set(categories.value.map((c) => c.nome))].sort())
 
-const filters = reactive({ search: '', type: '', category: '', status: '' })
+const filters = reactive({ search: '', type: '', category: '', status: '', dateFrom: '', dateTo: '' })
+const sort = reactive({ key: 'data', dir: 'desc' })
 const workflow = reactive({ open: false, loading: false, transactionId: null, events: [] })
 
-const hasFilters = computed(() => filters.search || filters.type || filters.category || filters.status)
+useRouteQuerySync([
+  { query: 'q', get: () => filters.search },
+  { query: 'type', get: () => filters.type },
+  { query: 'category', get: () => filters.category },
+  { query: 'status', get: () => filters.status },
+  { query: 'from', get: () => filters.dateFrom },
+  { query: 'to', get: () => filters.dateTo },
+  { query: 'sort', get: () => sort.key },
+  { query: 'dir', get: () => sort.dir }
+])
+
+const hasFilters = computed(
+  () =>
+    filters.search ||
+    filters.type ||
+    filters.category ||
+    filters.status ||
+    filters.dateFrom ||
+    filters.dateTo
+)
 
 const filteredTransactions = computed(() => {
   return transactions.value.filter((t) => {
@@ -186,9 +235,37 @@ const filteredTransactions = computed(() => {
     const matchesType = !filters.type || t.tipo === filters.type
     const matchesCategory = !filters.category || t.categoria === filters.category
     const matchesStatus = !filters.status || t.status === filters.status
-    return matchesSearch && matchesType && matchesCategory && matchesStatus
+    const matchesDate = inDateRange(t.data, filters.dateFrom, filters.dateTo)
+    return matchesSearch && matchesType && matchesCategory && matchesStatus && matchesDate
   })
 })
+
+const sortGetters = {
+  data: (t) => t.data,
+  data__type: 'date',
+  valor: (t) => t.valor,
+  valor__type: 'number',
+  tipo: (t) => t.tipo,
+  status: (t) => t.status,
+  status__type: 'status'
+}
+
+const displayedTransactions = computed(() =>
+  sortRows(filteredTransactions.value, sort.key, sort.dir, sortGetters)
+)
+
+const toggleSort = (key) => {
+  if (sort.key === key) sort.dir = sort.dir === 'asc' ? 'desc' : 'asc'
+  else {
+    sort.key = key
+    sort.dir = key === 'data' || key === 'valor' ? 'desc' : 'asc'
+  }
+}
+
+const sortIcon = (key) => {
+  if (sort.key !== key) return 'arrows'
+  return sort.dir === 'asc' ? 'chevron-up' : 'chevron-down'
+}
 
 const totalIn = computed(() =>
   filteredTransactions.value.filter((t) => t.tipo === 'Entrada').reduce((acc, t) => acc + t.valor, 0)
@@ -202,6 +279,8 @@ const clearFilters = () => {
   filters.type = ''
   filters.category = ''
   filters.status = ''
+  filters.dateFrom = ''
+  filters.dateTo = ''
 }
 
 const formatDate = (iso) => {
@@ -260,32 +339,17 @@ const handleDelete = async (id) => {
 }
 
 const exportCSV = () => {
-  const rows = filteredTransactions.value
+  const rows = displayedTransactions.value
   if (!rows.length) {
     showToast('Não há transações para exportar.', 'info')
     return
   }
-  const header = ['Data', 'Descrição', 'Tipo', 'Categoria', 'Valor', 'Status']
-  const lines = [
-    header.join(';'),
-    ...rows.map((t) =>
-      [
-        t.data,
-        `"${String(t.descricao || '-').replace(/"/g, '""')}"`,
-        t.tipo,
-        t.categoria,
-        t.valor.toFixed(2),
-        t.status
-      ].join(';')
-    )
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `transacoes-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  downloadCsv(
+    `transacoes-${new Date().toISOString().slice(0, 10)}.csv`,
+    ['Data', 'Descrição', 'Tipo', 'Categoria', 'Valor', 'Status'],
+    rows,
+    (t) => [t.data, t.descricao || '-', t.tipo, t.categoria, t.valor.toFixed(2), t.status]
+  )
   showToast(`CSV gerado (${rows.length} registros).`, 'success')
 }
 </script>
@@ -317,4 +381,11 @@ const exportCSV = () => {
   flex-wrap: wrap;
   align-items: flex-start;
 }
+.th-sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.th-sortable:hover { color: var(--brand-primary); }
+.sort-icon { vertical-align: middle; margin-left: 4px; opacity: 0.65; }
 </style>

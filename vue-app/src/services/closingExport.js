@@ -1,7 +1,3 @@
-import * as XLSX from 'xlsx'
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
-
 const formatBrl = (v) =>
   Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
@@ -14,7 +10,8 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url)
 }
 
-export function exportClosingExcel(exportData, period) {
+export async function exportClosingExcel(exportData, period) {
+  const XLSX = await import('xlsx')
   const { summary, lines, transactions } = exportData
   const wb = XLSX.utils.book_new()
 
@@ -78,7 +75,11 @@ export function exportClosingExcel(exportData, period) {
   downloadBlob(blob, filename)
 }
 
-export function exportClosingPdf(exportData, period) {
+export async function exportClosingPdf(exportData, period) {
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable')
+  ])
   const { summary, lines, transactions } = exportData
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
 

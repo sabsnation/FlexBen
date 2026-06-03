@@ -117,6 +117,7 @@ import MoneyInput from '../components/MoneyInput.vue'
 import Icon from '../components/Icon.vue'
 import { roundMoney } from '../services/moneyFormat.js'
 import { categoryColor } from '../config/chartTheme.js'
+import { useUnsavedFormGuard } from '../composables/useUnsavedFormGuard.js'
 
 const router = useRouter()
 const { categories, loadCategories } = useCategories()
@@ -125,6 +126,12 @@ const { showToast } = useToast()
 
 const form = reactive({ categoria: '', valor: null, descricao: '' })
 const loading = ref(false)
+
+const hasUnsavedForm = () => {
+  const v = Number(form.valor) || 0
+  return v > 0 || !!(form.descricao && form.descricao.trim())
+}
+useUnsavedFormGuard(hasUnsavedForm)
 
 const activeCategories = computed(() => categories.value.filter((c) => c.status !== 'Inativa'))
 

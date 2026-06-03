@@ -21,6 +21,19 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [vue()],
     server: { proxy: apiProxy },
-    preview: { proxy: apiProxy }
+    preview: { proxy: apiProxy },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('chart.js') || id.includes('vue-chartjs')) return 'vendor-charts'
+              if (id.includes('xlsx') || id.includes('jspdf')) return 'vendor-export'
+              if (id.includes('vue') || id.includes('vue-router')) return 'vendor-vue'
+            }
+          }
+        }
+      }
+    }
   }
 })

@@ -2,8 +2,17 @@
   <div class="login-wrapper">
     <aside class="login-visual">
       <div class="visual-content">
-        <div class="brand-row">
-          <div class="brand-mark">CB</div>
+        <RouterLink
+          v-if="auth.isAuthenticated"
+          to="/dashboard"
+          class="brand-row brand-row--link"
+          title="Ir para o painel"
+        >
+          <div class="brand-mark" aria-hidden="true">FB</div>
+          <span class="brand-text">FlexBen · 2026</span>
+        </RouterLink>
+        <div v-else class="brand-row">
+          <div class="brand-mark" aria-hidden="true">FB</div>
           <span class="brand-text">FlexBen · 2026</span>
         </div>
 
@@ -118,9 +127,16 @@
           Entrar com Google
         </button>
         <p v-if="googleEnabled && googleLoading" class="muted text-xs google-hint">Validando conta Google…</p>
-        <p v-if="googleEnabled && isDev" class="muted text-xs google-origin-hint">
-          Dev: em Google Cloud → Credenciais OAuth, adicione a origem
-          <code>http://localhost:5173</code> em «Origens JavaScript autorizadas».
+        <div v-if="googleEnabled && googleOriginError" class="notice warning google-origin-hint">
+          <Icon name="alert-triangle" :size="14" class="notice-icon" />
+          <span>
+            O Google bloqueou o botão nesta URL (<code>{{ appOrigin }}</code>). No
+            <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Google Cloud → Credenciais OAuth</a>,
+            abra o Client ID e adicione essa origem em «Origens JavaScript autorizadas». Use o botão abaixo ou login com senha.
+          </span>
+        </div>
+        <p v-else-if="googleEnabled && isDev" class="muted text-xs google-origin-hint">
+          Dev: autorize a origem <code>{{ appOrigin }}</code> no OAuth Client ID (Origens JavaScript).
         </p>
 
         <div class="form-footer contact-hint">
@@ -162,16 +178,18 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onActivated, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, onActivated, onBeforeUnmount, nextTick } from 'vue'
+import { useRouter, RouterLink } from 'vue-router'
 import { useAuth } from '../auth'
 import { useToast } from '../toast'
 import { assertLoginForm } from '../services/formValidators'
+import { HOME_ROUTE } from '../config/appRoutes.js'
 import {
   isGoogleLoginEnabled,
   loadGoogleScript,
   renderGoogleSignInButton,
-  promptGoogleSignIn
+  promptGoogleSignIn,
+  onGoogleSignInError
 } from '../config/googleAuth.js'
 import Icon from '../components/Icon.vue'
 
@@ -189,6 +207,10 @@ const googleEnabled = isGoogleLoginEnabled()
 const isDev = import.meta.env.DEV
 const googleBtnRef = ref(null)
 const showGoogleFallback = ref(false)
+const googleOriginError = ref(false)
+const appOrigin = ref(typeof window !== 'undefined' ? window.location.origin : '')
+let gsiConsolePatched = false
+let restoreConsoleError = null
 
 const demos = [
   { role: 'RH / Admin', short: 'RH', email: 'sabrina.admin@empresa.com', color: 'linear-gradient(135deg, #6366f1, #4338ca)' },
@@ -202,9 +224,39 @@ const fillDemo = (d) => {
   senha.value = '123'
 }
 
+function flagGoogleOriginMismatch() {
+  googleOriginError.value = true
+  showGoogleFallback.value = true
+}
+
+function watchGsiOriginErrors() {
+  if (gsiConsolePatched || typeof window === 'undefined') return
+  gsiConsolePatched = true
+  const prev = console.error
+  console.error = (...args) => {
+    const text = args.map((a) => String(a)).join(' ')
+    if (text.includes('origin is not allowed') || text.includes('GSI_LOGGER')) {
+      flagGoogleOriginMismatch()
+    }
+    prev.apply(console, args)
+  }
+  restoreConsoleError = () => {
+    console.error = prev
+    gsiConsolePatched = false
+  }
+}
+
 async function mountGoogleButton() {
   if (!googleEnabled) return
   showGoogleFallback.value = false
+  googleOriginError.value = false
+  watchGsiOriginErrors()
+  onGoogleSignInError((err) => {
+    const msg = String(err?.message || err?.type || '')
+    if (msg.includes('origin') || err?.type === 'idpiframe_initialization_failed') {
+      flagGoogleOriginMismatch()
+    }
+  })
   try {
     await loadGoogleScript()
     await nextTick()
@@ -216,7 +268,13 @@ async function mountGoogleButton() {
         ok = renderGoogleSignInButton(googleBtnRef.value, handleGoogleCredential)
       }
     }
-    showGoogleFallback.value = !ok
+    if (!ok) showGoogleFallback.value = true
+    setTimeout(() => {
+      const iframe = googleBtnRef.value?.querySelector('iframe')
+      if (iframe && iframe.offsetHeight < 8) {
+        flagGoogleOriginMismatch()
+      }
+    }, 2500)
   } catch (err) {
     showGoogleFallback.value = true
     console.warn('[google-auth]', err.message)
@@ -238,8 +296,27 @@ const retryGoogleButton = async () => {
   }
 }
 
-onMounted(mountGoogleButton)
-onActivated(mountGoogleButton)
+onMounted(async () => {
+  appOrigin.value = window.location.origin
+  if (auth.isAuthenticated.value) {
+    await router.replace(HOME_ROUTE)
+    return
+  }
+  await mountGoogleButton()
+})
+
+onActivated(async () => {
+  if (auth.isAuthenticated.value) {
+    await router.replace(HOME_ROUTE)
+    return
+  }
+  await mountGoogleButton()
+})
+
+onBeforeUnmount(() => {
+  restoreConsoleError?.()
+  restoreConsoleError = null
+})
 
 const handleGoogleCredential = async (credential) => {
   if (loading.value || googleLoading.value) return
@@ -247,7 +324,7 @@ const handleGoogleCredential = async (credential) => {
   try {
     await auth.loginWithGoogle(credential)
     showToast('Login com Google realizado!')
-    router.push(landingForRole(auth.role.value))
+    router.push(HOME_ROUTE)
   } catch (err) {
     showToast(err.message, 'error')
   } finally {
@@ -262,7 +339,7 @@ const handleLogin = async () => {
     assertLoginForm(email.value, senha.value)
     await auth.login(email.value, senha.value)
     showToast('Login realizado com sucesso!')
-    router.push(landingForRole(auth.role.value))
+    router.push(HOME_ROUTE)
   } catch (err) {
     showToast(err.message, 'error')
   } finally {
@@ -270,12 +347,6 @@ const handleLogin = async () => {
   }
 }
 
-function landingForRole(role) {
-  if (role === 'gestor') return '/gestor/aprovacoes'
-  if (role === 'financeiro') return '/financeiro/fechamento'
-  if (role === 'administrador') return '/rh/politicas'
-  return '/dashboard'
-}
 </script>
 
 <style scoped>
@@ -301,6 +372,15 @@ function landingForRole(role) {
 .visual-content { position: relative; z-index: 2; max-width: 540px; }
 
 .brand-row { display: flex; align-items: center; gap: 12px; margin-bottom: 3rem; }
+.brand-row--link {
+  text-decoration: none;
+  color: inherit;
+  border-radius: 12px;
+  padding: 4px 6px;
+  margin: -4px -6px 3rem;
+  transition: opacity 0.2s ease;
+}
+.brand-row--link:hover { opacity: 0.92; }
 .brand-mark {
   width: 42px; height: 42px;
   background: linear-gradient(135deg, #6366f1, #818cf8);
@@ -455,9 +535,14 @@ function landingForRole(role) {
   background: var(--surface-soft);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
-  line-height: 1.4;
+  line-height: 1.45;
+  font-size: 0.78rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
-.google-origin-hint code { font-size: 0.72rem; }
+.google-origin-hint code { font-size: 0.72rem; word-break: break-all; }
+.google-origin-hint a { color: var(--brand-primary); font-weight: 600; }
 
 .label-row {
   display: flex;

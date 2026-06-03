@@ -46,6 +46,25 @@
           Filtros
         </span>
       </h3>
+      <div class="filter-chips mb-2">
+        <button
+          type="button"
+          class="filter-chip"
+          :class="{ active: !loginOnly }"
+          @click="loginOnly = false"
+        >
+          Todos os eventos
+        </button>
+        <button
+          type="button"
+          class="filter-chip"
+          :class="{ active: loginOnly }"
+          @click="loginOnly = true"
+        >
+          Logins
+          <span class="filter-chip__count">{{ loginEventCount }}</span>
+        </button>
+      </div>
       <div class="form-row">
         <div class="form-group">
           <label>Buscar ação ou ator</label>
@@ -113,9 +132,14 @@ const provider = ref('')
 const loading = ref(true)
 const search = ref('')
 const moduleFilter = ref('')
+const loginOnly = ref(false)
 const { showToast } = useToast()
 
+const LOGIN_ACTIONS = new Set(['LOGIN', 'LOGIN_GOOGLE'])
+
 const ACTION_LABELS = {
+  LOGIN: 'Login (senha)',
+  LOGIN_GOOGLE: 'Login (Google)',
   USER_CREATED_BY_ADMIN: 'Usuário criado (admin)',
   USER_REGISTER: 'Cadastro de usuário',
   USER_STATUS_CHANGE: 'Status de usuário',
@@ -190,9 +214,14 @@ const modulesOptions = computed(() => {
   return [...mods].sort()
 })
 
+const loginEventCount = computed(() =>
+  events.value.filter((e) => LOGIN_ACTIONS.has(e.action)).length
+)
+
 const filtered = computed(() => {
   const search_term = search.value.trim().toLowerCase()
   return events.value.filter((e) => {
+    if (loginOnly.value && !LOGIN_ACTIONS.has(e.action)) return false
     const matchesSearch =
       !search_term ||
       (e.action || '').toLowerCase().includes(search_term) ||
@@ -315,5 +344,41 @@ const formatPayload = (ev) => {
   font-size: 0.72rem;
   overflow-x: auto;
   font-family: var(--font-mono);
+}
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-light);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.filter-chip.active {
+  background: color-mix(in srgb, var(--brand-primary) 10%, var(--surface));
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+}
+.filter-chip__count {
+  min-width: 1.25rem;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--surface-soft);
+  font-size: 0.72rem;
+}
+.filter-chip.active .filter-chip__count {
+  background: var(--brand-primary);
+  color: #fff;
 }
 </style>

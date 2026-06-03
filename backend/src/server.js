@@ -28,6 +28,7 @@ import { publishNotificationEvent } from './lib/notificationPublisher.js'
 import { NOTIFICATION_EVENTS } from './lib/notificationEvents.js'
 import { handleNotificationEvent } from './lib/notificationHandlers.js'
 import { createMessageBroker, isRabbitMqEnabled } from './adapters/messaging/createMessageBroker.js'
+import { sendRecoveryEmail } from './lib/mail.js'
 import {
   API_JSON_BODY_LIMIT,
   validateAvatarBase64
@@ -565,10 +566,21 @@ app.post(
     if (!email.includes('@')) {
       return res.status(400).json({ message: 'E-mail inválido.' })
     }
-    res.json({
-      ok: true,
-      message: 'Se o e-mail existir, você receberá instruções.'
-    })
+    let message = 'Se o e-mail existir, você receberá instruções por e-mail em instantes.'
+    try {
+      const user = await prisma.user.findUnique({ where: { email } })
+      if (user) {
+        const { sent } = await sendRecoveryEmail({ to: email, nome: user.nome })
+        if (sent) {
+          message = 'Enviamos um e-mail com orientações de acesso. Verifique sua caixa de entrada.'
+        } else if (process.env.NODE_ENV === 'development') {
+          console.info(`[recover] solicitação registrada para ${email} (SMTP não configurado)`)
+        }
+      }
+    } catch (err) {
+      console.warn('[recover] falha ao enviar e-mail:', err.message)
+    }
+    res.json({ ok: true, message })
   })
 )
 

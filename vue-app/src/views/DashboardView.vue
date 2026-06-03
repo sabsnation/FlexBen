@@ -33,7 +33,16 @@
           Atualizar
         </button>
       </div>
-      <p v-if="balancesLoading" class="muted text-sm">Carregando saldos…</p>
+      <ul v-if="balancesLoading" class="balance-grid balance-grid--skeleton" aria-hidden="true">
+        <li v-for="n in 4" :key="n" class="balance-grid__item">
+          <span class="skeleton balance-grid__dot-skel" />
+          <div class="balance-grid__info">
+            <span class="skeleton balance-grid__line" />
+            <span class="skeleton balance-grid__line balance-grid__line--sm" />
+          </div>
+          <span class="skeleton balance-grid__value-skel" />
+        </li>
+      </ul>
       <EmptyState
         v-else-if="!balanceRows.length"
         icon="layers"
@@ -615,6 +624,26 @@ const formatCurrency = (v) =>
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
   color: var(--brand-accent);
+}
+.balance-grid__dot-skel {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.balance-grid__line {
+  display: block;
+  height: 12px;
+  width: 72%;
+}
+.balance-grid__line--sm {
+  height: 10px;
+  width: 48%;
+}
+.balance-grid__value-skel {
+  display: block;
+  height: 14px;
+  width: 64px;
 }
 .balance-panel__total {
   display: flex;

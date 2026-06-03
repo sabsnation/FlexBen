@@ -1,23 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from './auth'
 import { useToast } from './toast'
+import { HOME_ROUTE, LOGIN_ROUTE, GUEST_ONLY_PATHS } from './config/appRoutes.js'
 import LoginView from './views/LoginView.vue'
-import CadastroView from './views/CadastroView.vue'
-import DashboardView from './views/DashboardView.vue'
-import RealocacaoView from './views/RealocacaoView.vue'
-import UtilizacaoView from './views/UtilizacaoView.vue'
-import TransacoesView from './views/TransacoesView.vue'
-import CategoriasView from './views/CategoriasView.vue'
-import CategoriasConsultaView from './views/CategoriasConsultaView.vue'
-import RecuperarSenhaView from './views/RecuperarSenhaView.vue'
-import AdminUsersView from './views/AdminUsersView.vue'
-import AdminLoadView from './views/AdminLoadView.vue'
-import AdminAuditView from './views/AdminAuditView.vue'
-import ManagerApprovalsView from './views/ManagerApprovalsView.vue'
-import RhPolicyBudgetView from './views/RhPolicyBudgetView.vue'
-import FinanceClosingView from './views/FinanceClosingView.vue'
-import CreditAllocationView from './views/CreditAllocationView.vue'
-import BenefitCeilingsView from './views/BenefitCeilingsView.vue'
+
+const lazy = (loader) => () => loader()
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -25,20 +12,20 @@ const routes = [
   {
     path: '/cadastro',
     name: 'Cadastro',
-    component: CadastroView,
+    component: lazy(() => import('./views/CadastroView.vue')),
     meta: { requiresAuth: true, allowedRoles: ['administrador'] }
   },
   {
     path: '/dashboard',
     name: 'Dashboard',
-    component: DashboardView,
+    component: lazy(() => import('./views/DashboardView.vue')),
     meta: { requiresAuth: true, allowedRoles: ['colaborador', 'gestor', 'administrador', 'financeiro'] }
   },
   { path: '/transferencia', redirect: '/realocar' },
   {
     path: '/realocar',
     name: 'Realocar créditos',
-    component: RealocacaoView,
+    component: lazy(() => import('./views/RealocacaoView.vue')),
     meta: {
       requiresAuth: true,
       allowedRoles: ['colaborador', 'gestor', 'administrador', 'financeiro']
@@ -47,7 +34,7 @@ const routes = [
   {
     path: '/utilizacao',
     name: 'Registrar utilização',
-    component: UtilizacaoView,
+    component: lazy(() => import('./views/UtilizacaoView.vue')),
     meta: {
       requiresAuth: true,
       allowedRoles: ['colaborador']
@@ -56,70 +43,74 @@ const routes = [
   {
     path: '/transacoes',
     name: 'Histórico',
-    component: TransacoesView,
+    component: lazy(() => import('./views/TransacoesView.vue')),
     meta: { requiresAuth: true, allowedRoles: ['colaborador', 'gestor', 'administrador', 'financeiro'] }
   },
   {
     path: '/consulta-categorias',
     name: 'Categorias de benefícios',
-    component: CategoriasConsultaView,
+    component: lazy(() => import('./views/CategoriasConsultaView.vue')),
     meta: { requiresAuth: true, allowedRoles: ['colaborador', 'gestor', 'administrador', 'financeiro'] }
   },
   {
     path: '/gestor/aprovacoes',
     name: 'Aprovações do Gestor',
-    component: ManagerApprovalsView,
+    component: lazy(() => import('./views/ManagerApprovalsView.vue')),
     meta: { requiresAuth: true, allowedRoles: ['gestor', 'administrador'] }
   },
   {
     path: '/rh/politicas',
     name: 'Políticas e Orçamento',
-    component: RhPolicyBudgetView,
+    component: lazy(() => import('./views/RhPolicyBudgetView.vue')),
     meta: { requiresAuth: true, allowedRoles: ['administrador'] }
   },
   {
     path: '/financeiro/fechamento',
     name: 'Fechamento Mensal',
-    component: FinanceClosingView,
+    component: lazy(() => import('./views/FinanceClosingView.vue')),
     meta: { requiresAuth: true, allowedRoles: ['financeiro', 'administrador'] }
   },
   {
     path: '/categorias',
     name: 'Gestão de Categorias',
-    component: CategoriasView,
+    component: lazy(() => import('./views/CategoriasView.vue')),
     meta: { requiresAuth: true, allowedRoles: ['administrador'] }
   },
   {
     path: '/usuarios',
     name: 'Gestão de Usuários',
-    component: AdminUsersView,
+    component: lazy(() => import('./views/AdminUsersView.vue')),
     meta: { requiresAuth: true, allowedRoles: ['administrador'] }
   },
   {
     path: '/carga',
     name: 'Carga Mensal',
-    component: AdminLoadView,
+    component: lazy(() => import('./views/AdminLoadView.vue')),
     meta: { requiresAuth: true, allowedRoles: ['administrador'] }
   },
   {
     path: '/alocar-creditos',
     name: 'Alocar créditos',
-    component: CreditAllocationView,
+    component: lazy(() => import('./views/CreditAllocationView.vue')),
     meta: { requiresAuth: true, allowedRoles: ['financeiro', 'gestor', 'administrador'] }
   },
   {
     path: '/financeiro/tetos',
     name: 'Tetos de benefícios',
-    component: BenefitCeilingsView,
+    component: lazy(() => import('./views/BenefitCeilingsView.vue')),
     meta: { requiresAuth: true, allowedRoles: ['financeiro', 'gestor', 'administrador'] }
   },
   {
     path: '/auditoria',
     name: 'Auditoria',
-    component: AdminAuditView,
+    component: lazy(() => import('./views/AdminAuditView.vue')),
     meta: { requiresAuth: true, allowedRoles: ['administrador'] }
   },
-  { path: '/recuperar-senha', name: 'Recuperar Senha', component: RecuperarSenhaView }
+  {
+    path: '/recuperar-senha',
+    name: 'Recuperar Senha',
+    component: lazy(() => import('./views/RecuperarSenhaView.vue'))
+  }
 ]
 
 const router = createRouter({
@@ -127,17 +118,27 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const auth = useAuth()
 
-  if (to.meta.requiresAuth && !auth.isAuthenticated.value) {
-    next({ name: 'Login' })
-  } else if (to.meta.allowedRoles && !to.meta.allowedRoles.includes(auth.role.value)) {
-    useToast().showToast('Acesso negado para o seu perfil.', 'error')
-    next({ name: 'Dashboard' })
-  } else {
-    next()
+  if (to.path === '/') {
+    return next(auth.isAuthenticated.value ? HOME_ROUTE : LOGIN_ROUTE)
   }
+
+  if (auth.isAuthenticated.value && GUEST_ONLY_PATHS.includes(to.path)) {
+    return next(HOME_ROUTE)
+  }
+
+  if (to.meta.requiresAuth && !auth.isAuthenticated.value) {
+    return next({ name: 'Login' })
+  }
+
+  if (to.meta.allowedRoles && !to.meta.allowedRoles.includes(auth.role.value)) {
+    useToast().showToast('Acesso negado para o seu perfil.', 'error')
+    return next(HOME_ROUTE)
+  }
+
+  next()
 })
 
 export default router

@@ -2,6 +2,7 @@ export const GOOGLE_CLIENT_ID = String(import.meta.env.VITE_GOOGLE_CLIENT_ID || 
 
 let gsiInitialized = false
 let credentialHandler = null
+let gsiErrorHandler = null
 
 export function isGoogleLoginEnabled() {
   return Boolean(GOOGLE_CLIENT_ID)
@@ -68,6 +69,10 @@ function ensureGsiInitialized() {
 }
 
 /** Uma única initialize por sessão; renderButton pode repetir ao remontar a tela. */
+export function onGoogleSignInError(handler) {
+  gsiErrorHandler = handler
+}
+
 export function renderGoogleSignInButton(container, onCredential) {
   if (!GOOGLE_CLIENT_ID || !container) {
     return false

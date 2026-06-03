@@ -6,6 +6,14 @@
       eyebrow="Gestão"
     >
       <template #actions>
+        <button
+          v-if="activeTab === 'usage'"
+          class="btn btn-secondary"
+          type="button"
+          @click="exportApprovalsCsv"
+        >
+          <Icon name="download" :size="14" /> Exportar CSV
+        </button>
         <button class="btn btn-secondary" type="button" @click="refresh(true)">
           <Icon name="refresh" :size="14" /> Atualizar
         </button>
@@ -33,7 +41,8 @@
       </button>
     </div>
 
-    <div v-show="activeTab === 'usage'" class="grid cols-4 mb-3">
+    <KpiSkeleton v-if="activeTab === 'usage' && pageLoading" />
+    <div v-show="activeTab === 'usage' && !pageLoading" class="grid cols-4 mb-3">
       <KpiCard label="Em análise" :value="sla.kpis.inAnalysis" tone="warning" icon="clock" />
       <KpiCard label="Aprovadas" :value="sla.kpis.approved" tone="success" icon="check-circle" />
       <KpiCard label="Reprovadas" :value="sla.kpis.rejected" tone="danger" icon="x-circle" />
@@ -52,7 +61,7 @@
           <span class="icon-bg sm"><Icon name="filter" :size="14" /></span>
           Filtros
         </span>
-        <button v-if="statusFilter || searchQuery" class="btn-link" type="button" @click="clearApprovalFilters">
+        <button v-if="hasApprovalFilters" class="btn-link" type="button" @click="clearApprovalFilters">
           Limpar filtros
         </button>
       </h3>
@@ -78,6 +87,29 @@
             <Icon name="search" :size="14" class="input-icon" />
             <input v-model="searchQuery" type="text" placeholder="Nome, e-mail ou categoria…" />
           </div>
+        </div>
+        <div class="form-group">
+          <label>Data inicial</label>
+          <input v-model="dateFrom" type="date" />
+        </div>
+        <div class="form-group">
+          <label>Data final</label>
+          <input v-model="dateTo" type="date" />
+        </div>
+        <div class="form-group">
+          <label>Ordenar por</label>
+          <select v-model="sortKey">
+            <option value="requestedAt">Data da solicitação</option>
+            <option value="amount">Valor</option>
+            <option value="status">Status</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Direção</label>
+          <select v-model="sortDir">
+            <option value="desc">Mais recente / maior primeiro</option>
+            <option value="asc">Mais antigo / menor primeiro</option>
+          </select>
         </div>
         <div class="form-group">
           <label>SLA crítico (dias)</label>
@@ -126,10 +158,16 @@
         </span>
       </h3>
 
-      <EmptyState v-if="!approvals.length" icon="check-circle" title="Nenhuma solicitação" message="Sem itens para os filtros aplicados." />
+      <TableSkeleton v-if="pageLoading" :rows="5" />
+      <EmptyState
+        v-else-if="!displayedApprovals.length"
+        icon="check-circle"
+        title="Nenhuma solicitação"
+        :message="emptyApprovalsMessage"
+      />
 
       <ul v-else class="approval-list">
-        <li v-for="item in approvals" :key="'usage-' + item.id" class="approval-card">
+        <li v-for="item in displayedApprovals" :key="'usage-' + item.id" class="approval-card">
           <div class="approval-card__main">
             <div class="approval-card__top">
               <span class="op-badge" :class="item.operationType || 'utilizacao'">
@@ -309,6 +347,8 @@
 <script setup>
 import { onMounted, ref, reactive, computed } from 'vue'
 import { api } from '../api'
+import { useRouteQuerySync } from '../composables/useRouteQuerySync.js'
+import { inDateRange, sortRows, downloadCsv } from '../services/listUtils.js'
 import { useToast } from '../toast'
 import { useAuth } from '../auth'
 import { useCeilings } from '../ceilings'
@@ -316,6 +356,8 @@ import PageHeader from '../components/PageHeader.vue'
 import KpiCard from '../components/KpiCard.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import EmptyState from '../components/EmptyState.vue'
+import KpiSkeleton from '../components/KpiSkeleton.vue'
+import TableSkeleton from '../components/TableSkeleton.vue'
 import Modal from '../components/Modal.vue'
 import Icon from '../components/Icon.vue'
 
@@ -323,12 +365,30 @@ const formatCurrency = (v) =>
   Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 const activeTab = ref('usage')
+const pageLoading = ref(true)
 const approvals = ref([])
 const allApprovals = ref([])
 const ceilingApprovals = ref([])
 const statusFilter = ref('')
 const searchQuery = ref('')
+const dateFrom = ref('')
+const dateTo = ref('')
+const sortKey = ref('requestedAt')
+const sortDir = ref('desc')
 const thresholdDays = ref(7)
+
+useRouteQuerySync([
+  { query: 'q', get: () => searchQuery },
+  { query: 'status', get: () => statusFilter },
+  { query: 'from', get: () => dateFrom },
+  { query: 'to', get: () => dateTo },
+  { query: 'sort', get: () => sortKey },
+  { query: 'dir', get: () => sortDir }
+])
+
+const hasApprovalFilters = computed(
+  () => statusFilter.value || searchQuery.value.trim() || dateFrom.value || dateTo.value
+)
 
 const statusChips = [
   { value: '', label: 'Todos' },
@@ -420,12 +480,13 @@ const setStatusFilter = async (value) => {
 const clearApprovalFilters = async () => {
   statusFilter.value = ''
   searchQuery.value = ''
+  dateFrom.value = ''
+  dateTo.value = ''
   await loadApprovals()
 }
 
 const filteredApprovals = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
-  if (!q) return approvals.value
   return approvals.value.filter((item) => {
     const hay = [
       item.actorEmail,
@@ -437,9 +498,47 @@ const filteredApprovals = computed(() => {
       .filter(Boolean)
       .join(' ')
       .toLowerCase()
-    return hay.includes(q)
+    const matchesSearch = !q || hay.includes(q)
+    const matchesDate = inDateRange(item.requestedAt, dateFrom.value, dateTo.value)
+    return matchesSearch && matchesDate
   })
 })
+
+const approvalSortGetters = {
+  requestedAt: (i) => i.requestedAt,
+  requestedAt__type: 'date',
+  amount: (i) => i.amount,
+  amount__type: 'number',
+  status: (i) => i.status,
+  status__type: 'status'
+}
+
+const displayedApprovals = computed(() =>
+  sortRows(filteredApprovals.value, sortKey.value, sortDir.value, approvalSortGetters)
+)
+
+const exportApprovalsCsv = () => {
+  const rows = displayedApprovals.value
+  if (!rows.length) {
+    showToast('Não há solicitações para exportar.', 'info')
+    return
+  }
+  downloadCsv(
+    `aprovacoes-${new Date().toISOString().slice(0, 10)}.csv`,
+    ['Data', 'Solicitante', 'Beneficiário', 'Categoria', 'Valor', 'Status', 'Operação'],
+    rows,
+    (r) => [
+      r.requestedAt,
+      r.actorEmail || r.beneficiaryEmail,
+      r.beneficiaryName || '',
+      r.category,
+      Number(r.amount || 0).toFixed(2),
+      r.status,
+      opTypeLabel(r.operationType)
+    ]
+  )
+  showToast(`CSV gerado (${rows.length} registros).`, 'success')
+}
 
 const emptyApprovalsMessage = computed(() => {
   if (searchQuery.value.trim()) {
@@ -498,13 +597,18 @@ const loadSlaSummary = async () => {
 }
 
 const refresh = async (fromButton = false) => {
-  await Promise.allSettled([
-    loadApprovals(),
-    loadAllApprovalsForCounts(),
-    loadSlaSummary(),
-    loadCeilingApprovals()
-  ])
-  if (fromButton) showToast('Fila de aprovações atualizada.')
+  pageLoading.value = true
+  try {
+    await Promise.allSettled([
+      loadApprovals(),
+      loadAllApprovalsForCounts(),
+      loadSlaSummary(),
+      loadCeilingApprovals()
+    ])
+    if (fromButton) showToast('Fila de aprovações atualizada.')
+  } finally {
+    pageLoading.value = false
+  }
 }
 
 const openDecision = (item, decision) => {

@@ -12,13 +12,13 @@
     />
 
     <aside class="sidebar" :class="{ 'sidebar--open': sidebarOpen }">
-      <div class="sidebar-header">
-        <div class="brand-mark">FB</div>
+      <RouterLink to="/dashboard" class="sidebar-header sidebar-header--link" title="Ir para o painel">
+        <div class="brand-mark" aria-hidden="true">FB</div>
         <div class="sidebar-brand">
           <span class="sidebar-brand__name">FlexBen</span>
           <span class="sidebar-brand__tag">FLEX · 2026</span>
         </div>
-      </div>
+      </RouterLink>
 
       <nav class="sidebar-nav">
         <div v-for="section in visibleSections" :key="section.id" class="menu-group">
@@ -95,7 +95,17 @@
         </div>
       </header>
 
-      <router-view />
+      <router-view v-slot="{ Component }">
+        <Suspense>
+          <component :is="Component" />
+          <template #fallback>
+            <div class="route-loading" aria-live="polite">
+              <Icon name="spinner" :size="22" class="spin" />
+              <span>Carregando…</span>
+            </div>
+          </template>
+        </Suspense>
+      </router-view>
     </main>
   </div>
 
@@ -258,6 +268,25 @@ const topAvatarStyle = computed(() => {
 </script>
 
 <style scoped>
+.sidebar-header--link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--radius-md);
+  margin: -4px -6px 0;
+  padding: 4px 6px;
+  transition: var(--transition);
+}
+.sidebar-header--link:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.sidebar-header--link:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
 .brand-mark {
   width: 40px;
   height: 40px;
@@ -429,5 +458,17 @@ const topAvatarStyle = computed(() => {
   letter-spacing: 0.08em;
   font-weight: 600;
   margin-top: 1px;
+}
+
+.route-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 240px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
 }
 </style>

@@ -69,6 +69,15 @@
         </div>
 
         <button
+          v-if="hasStoredRealloc"
+          type="button"
+          class="btn btn-ghost btn-sm mb-2"
+          @click="applyLastReallocation"
+        >
+          <Icon name="refresh" :size="12" /> Repetir última realocação
+        </button>
+
+        <button
           class="btn btn-primary btn-block mt-3"
           :disabled="submitDisabled || !auth.can('credit_reallocate') || loading || balancesLoading"
           @click="submit"
@@ -169,6 +178,9 @@ import CategoryBalancePicker from '../components/CategoryBalancePicker.vue'
 import MoneyInput from '../components/MoneyInput.vue'
 import Icon from '../components/Icon.vue'
 import { categoryColor } from '../config/chartTheme.js'
+import { useUnsavedFormGuard } from '../composables/useUnsavedFormGuard.js'
+
+const LAST_REALLOC_KEY = 'flexben:lastReallocation'
 
 const router = useRouter()
 const {
@@ -284,6 +296,49 @@ onActivated(async () => {
 
 const form = reactive({ fromCategory: '', toCategory: '', valor: null, descricao: '' })
 
+const hasStoredRealloc = computed(() => {
+  try {
+    return !!localStorage.getItem(LAST_REALLOC_KEY)
+  } catch {
+    return false
+  }
+})
+
+const saveLastReallocation = () => {
+  try {
+    localStorage.setItem(
+      LAST_REALLOC_KEY,
+      JSON.stringify({
+        fromCategory: form.fromCategory,
+        toCategory: form.toCategory,
+        descricao: form.descricao?.trim() || ''
+      })
+    )
+  } catch {
+    /* storage indisponível */
+  }
+}
+
+const applyLastReallocation = () => {
+  try {
+    const raw = localStorage.getItem(LAST_REALLOC_KEY)
+    if (!raw) return
+    const prev = JSON.parse(raw)
+    if (prev.fromCategory) form.fromCategory = prev.fromCategory
+    if (prev.toCategory) form.toCategory = prev.toCategory
+    if (prev.descricao) form.descricao = prev.descricao
+    showToast('Última realocação aplicada aos campos.', 'info')
+  } catch {
+    showToast('Não foi possível carregar a última realocação.', 'error')
+  }
+}
+
+const hasUnsavedForm = () => {
+  const v = Number(form.valor) || 0
+  return v > 0 || !!(form.descricao && form.descricao.trim())
+}
+useUnsavedFormGuard(hasUnsavedForm)
+
 /** Lista ativa: cadastro + saldos da API (categorias novas aparecem mesmo antes de recarregar o composable). */
 const activeCategories = computed(() => {
   const fromList = categories.value.filter((c) => c.status !== 'Inativa')
@@ -396,6 +451,7 @@ const submit = async () => {
       payload.userId = effectiveUserId.value
     }
     const result = await createReallocation(payload)
+    saveLastReallocation()
     if (result?.needsApproval) {
       showToast('Realocação enviada para aprovação do gestor. Aguarde a decisão.', 'info')
     } else {
