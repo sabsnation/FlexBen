@@ -61,6 +61,13 @@ export const useAuth = () => {
     return user
   }
 
+  const loginWithGoogle = async (credential) => {
+    const { token, user } = await authRepository.loginWithGoogle(credential)
+    httpApiClient.setToken(token)
+    persistUserSession(user)
+    return user
+  }
+
   const register = async (userData) => {
     await authRepository.register(userData)
   }
@@ -80,6 +87,10 @@ export const useAuth = () => {
   const allRegisteredUsers = computed(() => state.registeredUsers)
 
   const loadUsers = async () => {
+    if (!getToken() || !isAdmin.value) {
+      state.registeredUsers = []
+      return []
+    }
     const users = await userRepository.list()
     state.registeredUsers = users
     return users
@@ -135,6 +146,7 @@ export const useAuth = () => {
     refreshMe,
     recoverPassword,
     login,
+    loginWithGoogle,
     logout,
     register,
     updateProfile,

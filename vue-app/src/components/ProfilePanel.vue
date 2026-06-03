@@ -55,21 +55,26 @@
         <input :value="user?.dataCadastro || '—'" type="text" disabled />
       </div>
 
-      <hr class="divider" />
+      <template v-if="user?.authProvider !== 'google'">
+        <hr class="divider" />
 
-      <h4 class="section-label">Alterar senha</h4>
-      <div class="form-group">
-        <label>Senha atual</label>
-        <input v-model="currentPassword" type="password" autocomplete="current-password" />
-      </div>
-      <div class="form-group">
-        <label>Nova senha</label>
-        <input v-model="newPassword" type="password" autocomplete="new-password" />
-      </div>
-      <div class="form-group">
-        <label>Confirmar nova senha</label>
-        <input v-model="confirmPassword" type="password" autocomplete="new-password" />
-      </div>
+        <h4 class="section-label">Alterar senha</h4>
+        <div class="form-group">
+          <label>Senha atual</label>
+          <input v-model="currentPassword" type="password" autocomplete="current-password" />
+        </div>
+        <div class="form-group">
+          <label>Nova senha</label>
+          <input v-model="newPassword" type="password" autocomplete="new-password" />
+        </div>
+        <div class="form-group">
+          <label>Confirmar nova senha</label>
+          <input v-model="confirmPassword" type="password" autocomplete="new-password" />
+        </div>
+      </template>
+      <p v-else class="muted text-sm google-profile-hint">
+        Esta conta usa Google. A senha é gerenciada pela sua conta Google.
+      </p>
     </div>
 
     <template #footer>

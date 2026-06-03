@@ -51,16 +51,14 @@
           <div class="form-row">
             <div class="form-group">
               <label>Teto mensal proposto (R$)</label>
-              <input v-model.number="form.proposedMonthlyCap" type="number" min="1" step="0.01" required />
+              <MoneyInput v-model="form.proposedMonthlyCap" :min="1" aria-label="Teto mensal proposto" />
             </div>
             <div class="form-group">
               <label>Máx. por transação (R$)</label>
-              <input
-                v-model.number="form.proposedMaxPerTx"
-                type="number"
-                min="0"
-                step="0.01"
+              <MoneyInput
+                v-model="form.proposedMaxPerTx"
                 placeholder="Opcional"
+                aria-label="Máximo por transação"
               />
             </div>
           </div>
@@ -160,6 +158,7 @@ import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import Icon from '../components/Icon.vue'
+import MoneyInput from '../components/MoneyInput.vue'
 
 const { showToast } = useToast()
 const auth = useAuth()

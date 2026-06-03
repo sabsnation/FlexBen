@@ -66,6 +66,7 @@
             <th>Usuário</th>
             <th>E-mail</th>
             <th>Perfil</th>
+            <th>Login</th>
             <th>Status</th>
             <th>Cadastro</th>
             <th style="text-align: right;">Ações</th>
@@ -81,6 +82,7 @@
             </td>
             <td class="muted">{{ u.email }}</td>
             <td><span class="badge" :class="rolePill(u.role)">{{ roleLabel(u.role) }}</span></td>
+            <td><span class="badge badge-muted">{{ authLabel(u.authProvider) }}</span></td>
             <td><StatusBadge :status="u.status" /></td>
             <td class="muted">{{ u.data }}</td>
             <td class="text-right">
@@ -108,6 +110,30 @@
         <input v-model="form.email" type="email" placeholder="nome@empresa.com" />
       </div>
       <div class="form-group">
+        <label>Tipo de acesso <span class="req">*</span></label>
+        <div class="auth-type-row">
+          <button
+            type="button"
+            class="auth-type-btn"
+            :class="{ active: form.authProvider === 'password' }"
+            @click="form.authProvider = 'password'"
+          >
+            Demo / senha
+          </button>
+          <button
+            type="button"
+            class="auth-type-btn"
+            :class="{ active: form.authProvider === 'google' }"
+            @click="setGoogleAuth"
+          >
+            Google
+          </button>
+        </div>
+        <p v-if="form.authProvider === 'google'" class="field-help">
+          Use o e-mail da conta Google do colaborador. O acesso será apenas pelo botão «Entrar com Google».
+        </p>
+      </div>
+      <div class="form-group">
         <label>Perfil de acesso <span class="req">*</span></label>
         <select v-model="form.role">
           <option value="colaborador">Colaborador</option>
@@ -116,7 +142,7 @@
           <option value="financeiro">Financeiro</option>
         </select>
       </div>
-      <div class="form-group">
+      <div v-if="form.authProvider === 'password'" class="form-group">
         <label>Senha provisória <span class="req">*</span></label>
         <input v-model="form.senha" type="text" placeholder="Mínimo 6 caracteres" />
         <p class="field-help">Compartilhe esta senha com segurança. O usuário pode trocá-la depois.</p>
@@ -152,11 +178,15 @@ const { showToast } = useToast()
 const { confirm } = useConfirm()
 
 onMounted(async () => {
-  await loadUsers()
+  try {
+    await loadUsers()
+  } catch (err) {
+    showToast(err.message, 'error')
+  }
 })
 
 const filters = reactive({ search: '', role: '', status: '' })
-const form = reactive({ nome: '', email: '', role: 'colaborador', senha: '' })
+const form = reactive({ nome: '', email: '', role: 'colaborador', senha: '', authProvider: 'password' })
 const modal = reactive({ open: false, error: '', loading: false })
 
 const total = computed(() => users.value.length)
@@ -194,6 +224,11 @@ const roleLabel = (role) => {
   if (role === 'financeiro') return 'Financeiro'
   return 'Colaborador'
 }
+const authLabel = (provider) => (provider === 'google' ? 'Google' : 'Senha')
+const setGoogleAuth = () => {
+  form.authProvider = 'google'
+  form.senha = ''
+}
 const rolePill = (role) => {
   if (role === 'administrador') return 'badge-primary'
   if (role === 'gestor') return 'badge-info'
@@ -206,6 +241,7 @@ const openInvite = () => {
   form.email = ''
   form.role = 'colaborador'
   form.senha = ''
+  form.authProvider = 'password'
   modal.error = ''
   modal.open = true
 }
@@ -224,7 +260,7 @@ const handleInvite = async () => {
     modal.error = 'Informe um e-mail corporativo válido.'
     return
   }
-  if (!form.senha || form.senha.length < 6) {
+  if (form.authProvider === 'password' && (!form.senha || form.senha.length < 6)) {
     modal.error = 'A senha provisória precisa ter ao menos 6 caracteres.'
     return
   }
@@ -233,7 +269,8 @@ const handleInvite = async () => {
     await inviteUser({
       nome: form.nome.trim(),
       email: form.email.trim(),
-      senha: form.senha,
+      senha: form.authProvider === 'password' ? form.senha : undefined,
+      authProvider: form.authProvider,
       role: form.role
     })
     showToast('Usuário convidado com sucesso.')
@@ -286,5 +323,31 @@ const handleDelete = async (id, nome) => {
   transform: translateY(-50%);
   color: var(--text-subtle);
   pointer-events: none;
+}
+.auth-type-row {
+  display: flex;
+  gap: 8px;
+}
+.auth-type-btn {
+  flex: 1;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.auth-type-btn:hover {
+  border-color: var(--brand-primary);
+  color: var(--text-strong);
+}
+.auth-type-btn.active {
+  border-color: var(--brand-primary);
+  background: var(--brand-primary-softer);
+  color: var(--brand-primary-dark);
 }
 </style>

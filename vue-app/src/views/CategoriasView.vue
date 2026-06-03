@@ -67,7 +67,7 @@
       </div>
       <div class="form-group">
         <label>Limite mensal por colaborador (R$) <span class="req">*</span></label>
-        <input v-model.number="form.limite" type="number" min="0.01" step="0.01" placeholder="0,00" />
+        <MoneyInput v-model="form.limite" :min="0.01" aria-label="Limite mensal por colaborador" />
         <p class="field-help">Valor é aplicado para cada colaborador na carga mensal.</p>
       </div>
       <p v-if="modal.error" class="field-error">{{ modal.error }}</p>
@@ -96,6 +96,7 @@ import StatusBadge from '../components/StatusBadge.vue'
 import EmptyState from '../components/EmptyState.vue'
 import Modal from '../components/Modal.vue'
 import Icon from '../components/Icon.vue'
+import MoneyInput from '../components/MoneyInput.vue'
 
 const formatCurrency = (v) =>
   Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })

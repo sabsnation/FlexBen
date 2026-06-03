@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node scripts/free-port.js && node scripts/ensure-db-schema.js && node --watch src/server.js",
+    "dev": "node scripts/free-port.js && node scripts/ensure-db-schema.js && npx prisma generate && node --watch src/server.js",
     "db:sync": "node scripts/ensure-prisma-provider.js && prisma db push",
     "dev:kill-port": "node scripts/free-port.js",
     "start": "node src/server.js",
@@ -30,6 +30,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "firebase-admin": "^13.0.2",
+    "google-auth-library": "^9.15.1",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.10.0",
     "morgan": "^1.10.0",

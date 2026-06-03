@@ -12,6 +12,7 @@ async function main() {
       nome: 'Admin RH',
       email: 'admin@empresa.com',
       passwordHash: hash,
+      authProvider: 'password',
       role: 'administrador',
       status: 'Ativo',
       dataCadastro: '01/04/2026'
@@ -20,6 +21,7 @@ async function main() {
       nome: 'Sabrina Admin',
       email: 'sabrina.admin@empresa.com',
       passwordHash: hash,
+      authProvider: 'password',
       role: 'administrador',
       status: 'Ativo',
       dataCadastro: '15/04/2026'
@@ -28,6 +30,7 @@ async function main() {
       nome: 'João Silva',
       email: 'joao.silva@empresa.com',
       passwordHash: hash,
+      authProvider: 'password',
       role: 'colaborador',
       status: 'Ativo',
       dataCadastro: '10/04/2026'
@@ -36,6 +39,7 @@ async function main() {
       nome: 'Paulo Gestor',
       email: 'gestor@empresa.com',
       passwordHash: hash,
+      authProvider: 'password',
       role: 'gestor',
       status: 'Ativo',
       dataCadastro: '02/04/2026'
@@ -44,6 +48,7 @@ async function main() {
       nome: 'Fernanda Financeiro',
       email: 'financeiro@empresa.com',
       passwordHash: hash,
+      authProvider: 'password',
       role: 'financeiro',
       status: 'Ativo',
       dataCadastro: '03/04/2026'
@@ -52,6 +57,7 @@ async function main() {
       nome: 'Ana Souza',
       email: 'ana.souza@empresa.com',
       passwordHash: hash,
+      authProvider: 'password',
       role: 'colaborador',
       status: 'Ativo',
       dataCadastro: '21/04/2026'
@@ -60,6 +66,7 @@ async function main() {
       nome: 'Carlos Lima',
       email: 'carlos.lima@empresa.com',
       passwordHash: hash,
+      authProvider: 'password',
       role: 'colaborador',
       status: 'Ativo',
       dataCadastro: '22/04/2026'
@@ -68,6 +75,7 @@ async function main() {
       nome: 'Marina Costa',
       email: 'marina.costa@empresa.com',
       passwordHash: hash,
+      authProvider: 'password',
       role: 'colaborador',
       status: 'Inativo',
       dataCadastro: '25/04/2026'

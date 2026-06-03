@@ -26,15 +26,11 @@
 
         <div class="form-group">
           <label>Valor (R$) <span class="req">*</span></label>
-          <input
-            v-model.number="form.valor"
-            type="number"
-            min="0.01"
-            :max="maxValor"
-            step="0.01"
-            placeholder="0,00"
+          <MoneyInput
+            v-model="form.valor"
+            :max="maxValor > 0 ? maxValor : undefined"
             :disabled="maxValor <= 0"
-            @blur="clampValor"
+            aria-label="Valor da utilização"
           />
           <p v-if="maxValor > 0" class="field-help">
             Máximo nesta categoria: <strong>{{ formatCurrency(maxValor) }}</strong>
@@ -117,7 +113,9 @@ import { useTransactions } from '../transactions'
 import { useToast } from '../toast'
 import PageHeader from '../components/PageHeader.vue'
 import CategoryBalancePicker from '../components/CategoryBalancePicker.vue'
+import MoneyInput from '../components/MoneyInput.vue'
 import Icon from '../components/Icon.vue'
+import { roundMoney } from '../services/moneyFormat.js'
 import { categoryColor } from '../config/chartTheme.js'
 
 const router = useRouter()
@@ -186,17 +184,6 @@ const submitDisabled = computed(() => {
   return false
 })
 
-const roundMoney = (n) => Math.round(n * 100) / 100
-
-const clampValor = () => {
-  const v = Number(form.valor)
-  if (!Number.isFinite(v) || v <= 0) {
-    form.valor = null
-    return
-  }
-  if (v > maxValor.value) form.valor = maxValor.value
-}
-
 const setFraction = (frac) => {
   if (maxValor.value <= 0) return
   form.valor = roundMoney(maxValor.value * frac)
@@ -206,7 +193,7 @@ watch(
   () => form.categoria,
   () => {
     if (form.valor != null && form.valor > maxValor.value) {
-      clampValor()
+      form.valor = roundMoney(maxValor.value)
     }
   }
 )
@@ -216,7 +203,6 @@ const formatCurrency = (v) =>
 
 const submit = async () => {
   if (loading.value || submitDisabled.value) return
-  clampValor()
   loading.value = true
   try {
     await registerUsage({

@@ -37,6 +37,7 @@ import {
   buildClosingCsv,
   parseMonthYearQuery as parseClosingMonthYear
 } from './lib/closingExport.js'
+import { verifyGoogleCredential } from './lib/googleAuth.js'
 
 const PORT = Number(process.env.PORT || 3333)
 const JWT_SECRET = process.env.JWT_SECRET || 'flexben-dev-secret'
@@ -89,6 +90,7 @@ function publicUser(user, options = {}) {
     role: user.role,
     status: user.status,
     dataCadastro: user.dataCadastro,
+    authProvider: user.authProvider || 'password',
     hasAvatar: Boolean(user.avatarData),
     initials: user.nome
       .split(' ')
@@ -353,6 +355,12 @@ app.post(
     }
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user) return res.status(401).json({ message: 'E-mail ou senha incorretos.' })
+    if ((user.authProvider || 'password') === 'google') {
+      return res.status(403).json({ message: 'Esta conta usa login com Google.' })
+    }
+    if (!user.passwordHash) {
+      return res.status(403).json({ message: 'Conta sem senha configurada. Procure o RH.' })
+    }
     const ok = await bcrypt.compare(senha, user.passwordHash)
     if (!ok) return res.status(401).json({ message: 'E-mail ou senha incorretos.' })
     if (user.status !== 'Ativo') {
@@ -365,6 +373,61 @@ app.post(
     )
     await logBusinessEvent({
       action: 'LOGIN',
+      actorEmail: user.email,
+      module: 'auth',
+      entityId: user.id,
+      payload: { userId: user.id }
+    })
+    res.json({ token, user: publicUser(user) })
+  })
+)
+
+app.post(
+  '/api/auth/google',
+  asyncHandler(async (req, res) => {
+    const credential = String(req.body?.credential || '')
+    if (!credential) {
+      return res.status(400).json({ message: 'Token Google ausente.' })
+    }
+    let googleUser
+    try {
+      googleUser = await verifyGoogleCredential(credential)
+    } catch (err) {
+      return res.status(401).json({
+        message: err.message || 'Não foi possível validar o login com Google.'
+      })
+    }
+    const user = await prisma.user.findUnique({ where: { email: googleUser.email } })
+    if (!user) {
+      return res.status(403).json({
+        message: 'E-mail não cadastrado. Solicite acesso ao RH ou administrador.'
+      })
+    }
+    if ((user.authProvider || 'password') !== 'google') {
+      return res.status(403).json({ message: 'Esta conta usa e-mail e senha.' })
+    }
+    if (user.status !== 'Ativo') {
+      return res.status(403).json({ message: 'Conta inativa. Procure o RH.' })
+    }
+    if (googleUser.sub) {
+      if (user.googleSub && user.googleSub !== googleUser.sub) {
+        return res.status(403).json({ message: 'Conta Google não confere com o cadastro.' })
+      }
+      if (!user.googleSub) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { googleSub: googleUser.sub }
+        })
+        user.googleSub = googleUser.sub
+      }
+    }
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '12h' }
+    )
+    await logBusinessEvent({
+      action: 'LOGIN_GOOGLE',
       actorEmail: user.email,
       module: 'auth',
       entityId: user.id,
@@ -434,6 +497,9 @@ app.patch(
     }
     const user = await prisma.user.findUnique({ where: { id: req.auth.id } })
     if (!user) return res.status(404).json({ message: 'Usuário não encontrado.' })
+    if ((user.authProvider || 'password') === 'google' || !user.passwordHash) {
+      return res.status(403).json({ message: 'Contas Google não alteram senha aqui.' })
+    }
     const ok = await bcrypt.compare(currentPassword, user.passwordHash)
     if (!ok) return res.status(401).json({ message: 'Senha atual incorreta.' })
     const passwordHash = await bcrypt.hash(newPassword, 10)
@@ -523,11 +589,16 @@ app.post(
     const nome = String(req.body?.nome || '').trim()
     const email = String(req.body?.email || '').trim().toLowerCase()
     const senha = String(req.body?.senha || '')
+    const authProvider = String(req.body?.authProvider || 'password').trim().toLowerCase()
     const role = String(req.body?.role || 'colaborador').trim().toLowerCase()
     const allowedRoles = ['colaborador', 'gestor', 'administrador', 'financeiro']
+    const allowedProviders = ['password', 'google']
     if (nome.length < 2) return res.status(400).json({ message: 'Nome inválido.' })
     if (!email.includes('@')) return res.status(400).json({ message: 'E-mail inválido.' })
-    if (senha.length < 6) {
+    if (!allowedProviders.includes(authProvider)) {
+      return res.status(400).json({ message: 'Tipo de autenticação inválido.' })
+    }
+    if (authProvider === 'password' && senha.length < 6) {
       return res.status(400).json({ message: 'Senha deve ter ao menos 6 caracteres.' })
     }
     if (!allowedRoles.includes(role)) {
@@ -535,11 +606,13 @@ app.post(
     }
     const exists = await prisma.user.findUnique({ where: { email } })
     if (exists) return res.status(409).json({ message: 'Este e-mail já está cadastrado.' })
-    const passwordHash = await bcrypt.hash(senha, 10)
+    const passwordHash =
+      authProvider === 'password' ? await bcrypt.hash(senha, 10) : null
     const user = await prisma.user.create({
       data: {
         nome,
         email,
+        authProvider,
         passwordHash,
         role,
         status: 'Ativo',
@@ -551,7 +624,7 @@ app.post(
       actorEmail: req.auth.email,
       module: 'users',
       entityId: user.id,
-      payload: { userId: user.id, role }
+      payload: { userId: user.id, role, authProvider }
     })
     res.status(201).json({ user: publicUser(user) })
   })

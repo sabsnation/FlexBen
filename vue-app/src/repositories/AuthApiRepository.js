@@ -9,6 +9,10 @@ export class AuthApiRepository {
     return this.client.post('/auth/login', { email, senha })
   }
 
+  async loginWithGoogle(credential) {
+    return this.client.post('/auth/google', { credential })
+  }
+
   async register(userData) {
     return this.client.post('/auth/register', userData)
   }

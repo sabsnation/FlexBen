@@ -103,6 +103,16 @@
           </button>
         </form>
 
+        <div v-if="googleEnabled" class="google-divider">
+          <span>ou</span>
+        </div>
+        <div v-if="googleEnabled" ref="googleBtnRef" class="google-btn-wrap"></div>
+        <p v-if="googleEnabled && googleLoading" class="muted text-xs google-hint">Validando conta Google…</p>
+        <p v-if="googleEnabled && isDev" class="muted text-xs google-origin-hint">
+          Dev: em Google Cloud → Credenciais OAuth, adicione a origem
+          <code>http://localhost:5173</code> em «Origens JavaScript autorizadas».
+        </p>
+
         <div class="form-footer contact-hint">
           <Icon name="info" :size="14" />
           <span>
@@ -142,11 +152,16 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../auth'
 import { useToast } from '../toast'
 import { assertLoginForm } from '../services/formValidators'
+import {
+  isGoogleLoginEnabled,
+  loadGoogleScript,
+  renderGoogleSignInButton
+} from '../config/googleAuth.js'
 import Icon from '../components/Icon.vue'
 
 const router = useRouter()
@@ -156,8 +171,12 @@ const { showToast } = useToast()
 const email = ref('')
 const senha = ref('')
 const loading = ref(false)
+const googleLoading = ref(false)
 const showPassword = ref(false)
 const showDemo = ref(true)
+const googleEnabled = isGoogleLoginEnabled()
+const isDev = import.meta.env.DEV
+const googleBtnRef = ref(null)
 
 const demos = [
   { role: 'RH / Admin', short: 'RH', email: 'sabrina.admin@empresa.com', color: 'linear-gradient(135deg, #6366f1, #4338ca)' },
@@ -169,6 +188,31 @@ const demos = [
 const fillDemo = (d) => {
   email.value = d.email
   senha.value = '123'
+}
+
+onMounted(async () => {
+  if (!googleEnabled) return
+  try {
+    await loadGoogleScript()
+    await nextTick()
+    renderGoogleSignInButton(googleBtnRef.value, handleGoogleCredential)
+  } catch (err) {
+    console.warn('[google-auth]', err.message)
+  }
+})
+
+const handleGoogleCredential = async (credential) => {
+  if (loading.value || googleLoading.value) return
+  googleLoading.value = true
+  try {
+    await auth.loginWithGoogle(credential)
+    showToast('Login com Google realizado!')
+    router.push(landingForRole(auth.role.value))
+  } catch (err) {
+    showToast(err.message, 'error')
+  } finally {
+    googleLoading.value = false
+  }
 }
 
 const handleLogin = async () => {
@@ -331,6 +375,41 @@ function landingForRole(role) {
 .form-header .subtitle { margin: 0; }
 
 .form-body { margin-bottom: 1.5rem; }
+
+.google-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 1.25rem 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.google-divider::before,
+.google-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-light);
+}
+.google-btn-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+  min-height: 44px;
+}
+.google-hint { text-align: center; margin: 0 0 1rem; }
+.google-origin-hint {
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.65rem;
+  background: var(--surface-soft);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  line-height: 1.4;
+}
+.google-origin-hint code { font-size: 0.72rem; }
 
 .label-row {
   display: flex;

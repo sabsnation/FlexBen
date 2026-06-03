@@ -174,11 +174,18 @@ watch(isMobileLayout, (mobile) => {
 })
 
 onMounted(async () => {
-  if (getToken()) {
-    try {
-      await refreshMe()
-      await loadNotifications()
-    } catch {
+  if (!getToken()) return
+  try {
+    await refreshMe()
+    await loadNotifications()
+  } catch (err) {
+    const msg = String(err?.message || '')
+    const transient =
+      msg.includes('API ainda iniciando') ||
+      msg.includes('indisponível') ||
+      msg.includes('Sem conexão')
+    if (transient) return
+    if (msg.includes('Sessão expirada') || msg.includes('Token ausente')) {
       logout()
       router.push('/login')
     }

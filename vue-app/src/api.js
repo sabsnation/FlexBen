@@ -52,6 +52,9 @@ function parseResponseBody(text) {
 function errorFromResponse(res, data, text) {
   if (data?.message) return new Error(data.message)
   if (res.status === 401) return new Error('Sessão expirada. Faça login novamente.')
+  if (res.status === 502 || res.status === 503) {
+    return new Error('API ainda iniciando ou indisponível. Aguarde alguns segundos e atualize a página.')
+  }
   if (res.status === 403) return new Error('Acesso negado para o seu perfil.')
   if (res.status === 404) {
     if (text && text.includes('Cannot GET')) {

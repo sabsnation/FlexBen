@@ -6,7 +6,7 @@
     "install:all": "npm --prefix ./backend install && npm --prefix ./vue-app install",
     "dev:backend": "npm --prefix ./backend run dev",
     "dev:frontend": "npm --prefix ./vue-app run dev",
-    "dev": "concurrently -n BACKEND,FRONTEND -c blue,green \"npm --prefix ./backend run dev\" \"npm --prefix ./vue-app run dev\"",
+    "dev": "concurrently -n BACKEND,FRONTEND -c blue,green \"npm --prefix ./backend run dev\" \"npx wait-on -t 90000 http-get://127.0.0.1:3333/api/health && npm --prefix ./vue-app run dev\"",
     "build:backend": "npm --prefix ./backend install && npx --prefix ./backend prisma generate --schema=./backend/prisma/schema.prisma && npx --prefix ./backend prisma migrate deploy --schema=./backend/prisma/schema.prisma && npm --prefix ./backend run db:seed",
     "start:backend": "npm --prefix ./backend start",
     "render:build": "cd backend && npm install && npx prisma generate && npx prisma migrate deploy && npm run db:seed",
@@ -16,6 +16,7 @@
     "node": ">=20"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "wait-on": "^8.0.1"
   }
 }

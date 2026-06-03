@@ -1,5 +1,8 @@
 <template>
-  <div class="cat-picker" :class="{ 'cat-picker--compact': compact }">
+  <div
+    class="cat-picker"
+    :class="{ 'cat-picker--compact': compact, 'cat-picker--scroll': scrollable }"
+  >
     <button
       v-for="(opt, i) in options"
       :key="opt.value"
@@ -34,7 +37,8 @@ defineProps({
   options: { type: Array, default: () => [] },
   showBalance: { type: Boolean, default: true },
   compact: { type: Boolean, default: false },
-  emptyMessage: { type: String, default: 'Nenhuma categoria disponível.' }
+  emptyMessage: { type: String, default: 'Nenhuma categoria disponível.' },
+  scrollable: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -56,6 +60,11 @@ const select = (opt) => {
 }
 .cat-picker--compact {
   grid-template-columns: 1fr;
+}
+.cat-picker--scroll {
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 .cat-picker__item {
   display: flex;

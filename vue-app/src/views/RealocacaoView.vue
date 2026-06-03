@@ -36,6 +36,7 @@
           <CategoryBalancePicker
             v-model="form.fromCategory"
             :options="fromCategoryOptions"
+            scrollable
             empty-message="Nenhuma categoria com saldo para origem."
           />
         </div>
@@ -44,21 +45,18 @@
           <CategoryBalancePicker
             v-model="form.toCategory"
             :options="destCategoryOptions"
+            scrollable
             empty-message="Selecione outra categoria de destino."
           />
         </div>
 
         <div class="form-group">
           <label>Valor a realocar (R$) <span class="req">*</span></label>
-          <input
-            v-model.number="form.valor"
-            type="number"
-            min="0.01"
-            :max="balFrom"
-            step="0.01"
-            placeholder="0,00"
+          <MoneyInput
+            v-model="form.valor"
+            :max="balFrom > 0 ? balFrom : undefined"
             :disabled="balFrom <= 0"
-            @blur="clampValor"
+            aria-label="Valor a realocar"
           />
           <p v-if="balFrom > 0" class="field-help">
             Máximo na origem: <strong>{{ formatCurrency(balFrom) }}</strong>
@@ -158,7 +156,7 @@
 </template>
 
 <script setup>
-import { reactive, computed, watch, onMounted, ref } from 'vue'
+import { reactive, computed, watch, onMounted, onActivated, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTransactions } from '../transactions'
 import { useCategories } from '../categories'
@@ -168,6 +166,7 @@ import { creditAllocationRepository } from '../repositories/CreditAllocationApiR
 import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
 import CategoryBalancePicker from '../components/CategoryBalancePicker.vue'
+import MoneyInput from '../components/MoneyInput.vue'
 import Icon from '../components/Icon.vue'
 import { categoryColor } from '../config/chartTheme.js'
 
@@ -218,6 +217,7 @@ const reloadBalances = async () => {
   }
   balancesLoading.value = true
   try {
+    await loadCategories()
     await loadBalancesForUser(canPickUser.value ? effectiveUserId.value : null)
     pickDefaultCategories()
   } catch (e) {
@@ -243,28 +243,63 @@ const pickDefaultCategories = () => {
   }
 }
 
+const refreshPageData = async () => {
+  await loadCategories()
+  if (canPickUser.value) {
+    if (!eligibleUsers.value.length) {
+      loadingUsers.value = true
+      try {
+        eligibleUsers.value = await creditAllocationRepository.listEligibleUsers()
+      } finally {
+        loadingUsers.value = false
+      }
+    }
+    if (effectiveUserId.value) {
+      await reloadBalances()
+    }
+  } else {
+    selectedUserId.value = String(auth.user.value?.id || '')
+    await reloadBalances()
+  }
+}
+
 onMounted(async () => {
   try {
-    await loadCategories()
-    if (canPickUser.value) {
-      loadingUsers.value = true
-      eligibleUsers.value = await creditAllocationRepository.listEligibleUsers()
-      loadingUsers.value = false
-    } else {
-      selectedUserId.value = String(auth.user.value?.id || '')
-      await reloadBalances()
-      if (!balanceRows.value.some((r) => r.saldo > 0)) {
-        showToast('Nenhum saldo alocado. Peça ao RH para creditar suas categorias.', 'info')
-      }
+    await refreshPageData()
+    if (!canPickUser.value && !balanceRows.value.some((r) => r.saldo > 0)) {
+      showToast('Nenhum saldo alocado. Peça ao RH para creditar suas categorias.', 'info')
     }
   } catch (e) {
     showToast(e.message || 'Falha ao carregar dados para realocação.', 'error')
   }
 })
 
+onActivated(async () => {
+  try {
+    await refreshPageData()
+  } catch {
+    /* evita toast duplicado ao voltar na rota */
+  }
+})
+
 const form = reactive({ fromCategory: '', toCategory: '', valor: null, descricao: '' })
 
-const activeCategories = computed(() => categories.value.filter((c) => c.status !== 'Inativa'))
+/** Lista ativa: cadastro + saldos da API (categorias novas aparecem mesmo antes de recarregar o composable). */
+const activeCategories = computed(() => {
+  const fromList = categories.value.filter((c) => c.status !== 'Inativa')
+  const byNome = new Map(fromList.map((c) => [c.nome, c]))
+  for (const [nome, row] of Object.entries(balancesByCategory.value)) {
+    if (!byNome.has(nome)) {
+      byNome.set(nome, {
+        id: 0,
+        nome,
+        limite: Number(row?.limite) || 0,
+        status: 'Ativa'
+      })
+    }
+  }
+  return [...byNome.values()].sort((a, b) => Number(b.id) - Number(a.id))
+})
 
 const fromCategoryOptions = computed(() =>
   balanceRows.value
@@ -343,22 +378,12 @@ const submitDisabled = computed(() => {
 const formatCurrency = (v) =>
   Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-const clampValor = () => {
-  const v = Number(form.valor)
-  if (!Number.isFinite(v) || v <= 0) {
-    form.valor = null
-    return
-  }
-  if (v > balFrom.value) form.valor = Math.round(balFrom.value * 100) / 100
-}
-
 const submit = async () => {
   if (loading.value) return
   if (!auth.can('credit_reallocate')) {
     showToast('Seu perfil não possui permissão para realocação.', 'error')
     return
   }
-  clampValor()
   loading.value = true
   try {
     const payload = {

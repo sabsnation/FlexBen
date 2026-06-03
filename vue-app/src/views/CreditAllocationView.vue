@@ -120,13 +120,9 @@
               <td>{{ formatCurrency(row.saldo) }}</td>
               <td class="muted">{{ formatCurrency(row.limite) }}</td>
               <td>
-                <input
-                  v-model.number="row.valor"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  class="input-compact"
-                  placeholder="0,00"
+                <MoneyInput
+                  v-model="row.valor"
+                  input-class="input-compact"
                   :aria-label="`Valor para ${row.categoria}`"
                 />
               </td>
@@ -155,6 +151,7 @@ import { useCredits } from '../credits'
 import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
 import Icon from '../components/Icon.vue'
+import MoneyInput from '../components/MoneyInput.vue'
 
 const { showToast } = useToast()
 const { confirm } = useConfirm()
