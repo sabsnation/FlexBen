@@ -2,6 +2,31 @@ import { resolveApiBase, PRODUCTION_RENDER_ORIGIN } from './config/apiConfig.js'
 
 const TOKEN_KEY = 'auth_token'
 
+const PUBLIC_API_PATHS = ['/auth/login', '/auth/google', '/auth/register', '/auth/recover']
+
+let sessionEnding = false
+
+export function isSessionEnding() {
+  return sessionEnding
+}
+
+export function isAuthNoiseMessage(message) {
+  const m = String(message || '').toLowerCase().trim()
+  if (sessionEnding) return true
+  return m.includes('token ausente') || m === '__no_auth__'
+}
+
+function isPublicApiPath(path) {
+  const p = path.startsWith('/') ? path : `/${path}`
+  return PUBLIC_API_PATHS.some((prefix) => p.startsWith(prefix))
+}
+
+function authSkippedError() {
+  const err = new Error('__NO_AUTH__')
+  err.silent = true
+  return err
+}
+
 function getCandidateBases() {
   const primary = resolveApiBase()
   const bases = [primary]
@@ -35,7 +60,11 @@ export function setToken(token) {
 }
 
 export function clearToken() {
+  sessionEnding = true
   localStorage.removeItem(TOKEN_KEY)
+  window.setTimeout(() => {
+    sessionEnding = false
+  }, 2000)
 }
 
 function buildUrl(base, path) {
@@ -53,7 +82,11 @@ function parseResponseBody(text) {
 }
 
 function errorFromResponse(res, data, text) {
-  if (data?.message) return new Error(data.message)
+  const raw = data?.message ? String(data.message) : ''
+  if (/token ausente/i.test(raw) || (res.status === 401 && sessionEnding)) {
+    return authSkippedError()
+  }
+  if (raw) return new Error(raw)
   if (res.status === 401) return new Error('Sessão expirada. Faça login novamente.')
   if (res.status === 502 || res.status === 503) {
     return new Error('API ainda iniciando ou indisponível. Aguarde alguns segundos e atualize a página.')
@@ -101,6 +134,10 @@ async function requestWithBase(base, path, options = {}) {
 }
 
 async function request(path, options = {}) {
+  if (!getToken() && !isPublicApiPath(path)) {
+    throw authSkippedError()
+  }
+
   const bases = getCandidateBases()
   let lastError
 
@@ -144,6 +181,10 @@ async function request(path, options = {}) {
 }
 
 async function requestText(path, options = {}) {
+  if (!getToken() && !isPublicApiPath(path)) {
+    throw authSkippedError()
+  }
+
   const bases = getCandidateBases()
   let lastError
 

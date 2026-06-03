@@ -37,20 +37,6 @@
           </RouterLink>
         </div>
       </nav>
-
-      <div class="sidebar-footer">
-        <div class="user-mini">
-          <div class="avatar sm" :style="{ background: roleColor }">{{ initials }}</div>
-          <div class="user-mini__info">
-            <span class="user-mini__name">{{ user?.nome }}</span>
-            <span class="user-mini__role">{{ roleLabel }}</span>
-          </div>
-        </div>
-        <button @click="handleLogout" class="logout-btn" type="button">
-          <Icon name="logout" :size="14" />
-          Sair
-        </button>
-      </div>
     </aside>
 
     <main class="main-content">
@@ -85,16 +71,27 @@
             <span v-if="unreadCount" class="notif-badge">{{ unreadCount > 9 ? '9+' : unreadCount }}</span>
           </button>
 
-          <button type="button" class="user-profile user-profile--btn" @click="profileOpen = true">
-            <div class="avatar" :style="topAvatarStyle">
-              <img v-if="user?.avatarData" :src="user.avatarData" alt="" class="avatar-img" />
-              <span v-else>{{ initials }}</span>
-            </div>
-            <div class="user-profile__info hide-mobile">
-              <span class="user-profile__name">{{ user?.nome }}</span>
-              <span class="user-profile__role">{{ roleLabel }}</span>
-            </div>
-          </button>
+          <div class="header-account">
+            <button type="button" class="user-profile user-profile--btn" @click="profileOpen = true">
+              <div class="avatar" :style="topAvatarStyle">
+                <img v-if="user?.avatarData" :src="user.avatarData" alt="" class="avatar-img" />
+                <span v-else>{{ initials }}</span>
+              </div>
+              <div class="user-profile__info hide-mobile">
+                <span class="user-profile__name">{{ user?.nome }}</span>
+                <span class="user-profile__role">{{ roleLabel }}</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              class="logout-icon-btn"
+              aria-label="Sair da conta"
+              title="Sair"
+              @click="handleLogout"
+            >
+              <Icon name="logout" :size="16" />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -202,7 +199,7 @@ const handleLogout = async () => {
   })
   if (!ok) return
   logout()
-  router.push('/login')
+  await router.push('/login')
 }
 
 const visibleSections = computed(() =>
@@ -298,61 +295,43 @@ const topAvatarStyle = computed(() => {
   margin-top: 2px;
 }
 
-.user-mini {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0.6rem 0.7rem;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  margin-bottom: 0.6rem;
-}
-.user-mini__info { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; flex: 1; }
-.user-mini__name {
-  color: white;
-  font-size: 0.82rem;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.user-mini__role {
-  font-size: 0.68rem;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 600;
-  margin-top: 1px;
-}
-
-.logout-btn {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 0.65rem 0.85rem;
-  border-radius: var(--radius-sm);
-  background: rgba(239, 68, 68, 0.12);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.22);
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.82rem;
-  font-family: inherit;
-  transition: var(--transition);
-}
-.logout-btn:hover {
-  background: rgba(239, 68, 68, 0.22);
-  color: #fecaca;
-  border-color: rgba(239, 68, 68, 0.35);
-}
-
 .topbar-right {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.header-account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logout-icon-btn {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: var(--shadow-sm);
+  font-family: inherit;
+  padding: 0;
+}
+.logout-icon-btn:hover {
+  color: var(--brand-danger);
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.06);
+}
+.logout-icon-btn:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
 }
 
 .topbar-btn {

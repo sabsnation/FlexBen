@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+import { isAuthNoiseMessage } from './api.js'
 
 const state = reactive({
   message: '',
@@ -8,6 +9,7 @@ const state = reactive({
 
 export const useToast = () => {
   const showToast = (msg, type = 'success') => {
+    if (type === 'error' && isAuthNoiseMessage(msg)) return
     state.message = msg
     state.type = type
     state.visible = true
