@@ -20,12 +20,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [vue()],
-    server: {
-      proxy: apiProxy,
-      headers: {
-        'Cross-Origin-Opener-Policy': 'same-origin-allow-popups'
-      }
-    },
+    server: { proxy: apiProxy },
     preview: { proxy: apiProxy }
   }
 })

@@ -37,7 +37,7 @@ import {
   buildClosingCsv,
   parseMonthYearQuery as parseClosingMonthYear
 } from './lib/closingExport.js'
-import { verifyGoogleCredential } from './lib/googleAuth.js'
+import { verifyGoogleCredential, isGoogleAuthConfigured } from './lib/googleAuth.js'
 
 const PORT = Number(process.env.PORT || 3333)
 const JWT_SECRET = process.env.JWT_SECRET || 'flexben-dev-secret'
@@ -318,6 +318,7 @@ app.get(
         provider: isRabbitMqEnabled() ? 'rabbitmq' : 'inline',
         queue: 'flexben.notifications'
       },
+      googleAuth: isGoogleAuthConfigured(),
       features: [
         'auth',
         'transactions',

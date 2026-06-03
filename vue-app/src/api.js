@@ -7,7 +7,10 @@ function getCandidateBases() {
   const bases = [primary]
   const renderApi = `${PRODUCTION_RENDER_ORIGIN}/api`
 
-  if (!primary.includes('onrender.com')) {
+  const isLocalDev =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  if (!primary.includes('onrender.com') && !isLocalDev) {
     bases.push(renderApi)
   }
 
