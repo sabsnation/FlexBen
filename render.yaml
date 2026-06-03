@@ -47,3 +47,6 @@ services:
       # Com fila: crie instância em https://www.cloudamqp.com (plano free) e cole a URL AMQP.
       - key: RABBITMQ_URL
         sync: false
+      # Login Google (mesmo Client ID do VITE_GOOGLE_CLIENT_ID na Vercel)
+      - key: GOOGLE_CLIENT_ID
+        sync: false
