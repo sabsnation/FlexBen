@@ -107,6 +107,16 @@
           <span>ou</span>
         </div>
         <div v-if="googleEnabled" ref="googleBtnRef" class="google-btn-wrap"></div>
+        <button
+          v-if="googleEnabled && showGoogleFallback"
+          type="button"
+          class="btn btn-secondary btn-lg btn-block google-fallback-btn"
+          :disabled="googleLoading"
+          @click="retryGoogleButton"
+        >
+          <Icon name="user" :size="16" />
+          Entrar com Google
+        </button>
         <p v-if="googleEnabled && googleLoading" class="muted text-xs google-hint">Validando conta Google…</p>
         <p v-if="googleEnabled && isDev" class="muted text-xs google-origin-hint">
           Dev: em Google Cloud → Credenciais OAuth, adicione a origem
@@ -152,7 +162,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onActivated, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../auth'
 import { useToast } from '../toast'
@@ -160,7 +170,8 @@ import { assertLoginForm } from '../services/formValidators'
 import {
   isGoogleLoginEnabled,
   loadGoogleScript,
-  renderGoogleSignInButton
+  renderGoogleSignInButton,
+  promptGoogleSignIn
 } from '../config/googleAuth.js'
 import Icon from '../components/Icon.vue'
 
@@ -177,6 +188,7 @@ const showDemo = ref(true)
 const googleEnabled = isGoogleLoginEnabled()
 const isDev = import.meta.env.DEV
 const googleBtnRef = ref(null)
+const showGoogleFallback = ref(false)
 
 const demos = [
   { role: 'RH / Admin', short: 'RH', email: 'sabrina.admin@empresa.com', color: 'linear-gradient(135deg, #6366f1, #4338ca)' },
@@ -190,16 +202,44 @@ const fillDemo = (d) => {
   senha.value = '123'
 }
 
-onMounted(async () => {
+async function mountGoogleButton() {
   if (!googleEnabled) return
+  showGoogleFallback.value = false
   try {
     await loadGoogleScript()
     await nextTick()
-    renderGoogleSignInButton(googleBtnRef.value, handleGoogleCredential)
+    let ok = renderGoogleSignInButton(googleBtnRef.value, handleGoogleCredential)
+    if (!ok) {
+      for (let attempt = 0; attempt < 6 && !ok; attempt += 1) {
+        await new Promise((r) => setTimeout(r, 80 * (attempt + 1)))
+        await nextTick()
+        ok = renderGoogleSignInButton(googleBtnRef.value, handleGoogleCredential)
+      }
+    }
+    showGoogleFallback.value = !ok
   } catch (err) {
+    showGoogleFallback.value = true
     console.warn('[google-auth]', err.message)
   }
-})
+}
+
+const retryGoogleButton = async () => {
+  await mountGoogleButton()
+  if (showGoogleFallback.value) {
+    try {
+      await promptGoogleSignIn(handleGoogleCredential)
+    } catch (err) {
+      showToast(
+        'Não foi possível abrir o Google. Confira as origens autorizadas no Google Cloud.',
+        'error'
+      )
+      console.warn('[google-auth]', err.message)
+    }
+  }
+}
+
+onMounted(mountGoogleButton)
+onActivated(mountGoogleButton)
 
 const handleGoogleCredential = async (credential) => {
   if (loading.value || googleLoading.value) return
@@ -398,7 +438,15 @@ function landingForRole(role) {
   display: flex;
   justify-content: center;
   margin-bottom: 0.5rem;
-  min-height: 44px;
+  min-height: 48px;
+  width: 100%;
+}
+.google-fallback-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 0.5rem;
 }
 .google-hint { text-align: center; margin: 0 0 1rem; }
 .google-origin-hint {
