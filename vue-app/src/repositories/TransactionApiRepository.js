@@ -30,10 +30,6 @@ export class TransactionApiRepository {
     return this.client.post('/reallocations', payload)
   }
 
-  async registerUsage(payload) {
-    await this.client.post('/usage', payload)
-  }
-
   async remove(id) {
     await this.client.delete(`/transactions/${id}`)
   }

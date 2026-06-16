@@ -41,6 +41,7 @@ export class RabbitMqBroker {
           const event = JSON.parse(msg.content.toString())
           await handler(event)
           ch.ack(msg)
+          console.log(`[rabbitmq] mensagem consumida e processada: ${event?.type || '?'}`)
         } catch (err) {
           console.error('[rabbitmq] falha ao processar mensagem:', err.message)
           ch.nack(msg, false, false)
@@ -55,6 +56,7 @@ export class RabbitMqBroker {
     const ch = await this.#ensureChannel()
     const body = Buffer.from(JSON.stringify(event))
     ch.sendToQueue(QUEUE_NOTIFICATIONS, body, { persistent: true })
+    console.log(`[rabbitmq] publicado na fila "${QUEUE_NOTIFICATIONS}": ${event?.type || '?'}`)
   }
 
   async close() {

@@ -129,11 +129,6 @@ export const useTransactions = () => {
     return balances
   }
 
-  const registerUsage = async (payload) => {
-    await transactionRepository.registerUsage(payload)
-    await Promise.all([loadMine({ scope: 'mine' }), loadMyBalances()])
-  }
-
   const deleteTransaction = async (id) => {
     await transactionRepository.remove(id)
     state.items = state.items.filter((item) => item.id !== id)
@@ -163,7 +158,6 @@ export const useTransactions = () => {
     categoryBalance,
     categoryLimit,
     createReallocation,
-    registerUsage,
     deleteTransaction,
     getWorkflowHistory,
     totalBalance,

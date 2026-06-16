@@ -32,15 +32,6 @@ const routes = [
     }
   },
   {
-    path: '/utilizacao',
-    name: 'Registrar utilização',
-    component: lazy(() => import('./views/UtilizacaoView.vue')),
-    meta: {
-      requiresAuth: true,
-      allowedRoles: ['colaborador']
-    }
-  },
-  {
     path: '/transacoes',
     name: 'Histórico',
     component: lazy(() => import('./views/TransacoesView.vue')),
